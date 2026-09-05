@@ -118,6 +118,20 @@ export const chestPainTree: InterviewTree = {
       text_hi: '1 से 10 के पैमाने पर, दर्द कितना बुरा है?',
       type: 'number',
       next: (_answer) => {
+        return 'cp_history';
+      }
+    },
+    cp_history: {
+      id: 'cp_history',
+      text: 'Do you have any past history of heart disease, stent, hypertension, or diabetes?',
+      text_hi: 'क्या आपको पहले दिल की बीमारी, स्टेंट, हाई ब्लड प्रेशर या शुगर की समस्या रही है?',
+      type: 'single_choice',
+      options: [
+        { value: 'yes_cardiac', label: 'Yes, known heart disease / stent / bypass', label_hi: 'हाँ, दिल की बीमारी / स्टेंट / बाईपास' },
+        { value: 'yes_htn_dm', label: 'High BP or Diabetes only', label_hi: 'सिर्फ बीपी या शुगर' },
+        { value: 'no_history', label: 'No prior medical history', label_hi: 'कोई पुरानी बीमारी नहीं' }
+      ],
+      next: (_answer) => {
         return null; // End of interview
       }
     }

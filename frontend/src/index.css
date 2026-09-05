@@ -45,3 +45,15 @@
     color: hsl(var(--foreground));
   }
 }
+
+html.large-text {
+  font-size: 130%; /* Scales up rem units globally */
+}
+
+html.large-text h1 {
+  font-size: 1.2em;
+}
+
+html.large-text p, html.large-text button, html.large-text input {
+  font-size: 1.1em;
+}

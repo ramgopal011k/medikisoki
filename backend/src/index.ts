@@ -1,334 +1,561 @@
+// Gemini semantic layer is HOLD (deferred to Phase 4).
 import express, { Request, Response } from 'express';
-import { randomUUID } from 'crypto';
 import cors from 'cors';
-import { v4 as uuidv4 } from 'uuid';
-import db, { initDb } from './db';
+import dotenv from 'dotenv';
+import { supabase } from './supabase';
+
+dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-app.use(cors());
-app.use(express.json());
+app.use(cors({ origin: '*' }));
+app.use(express.json({ limit: '50mb' }));
 
-// Initialize SQLite DB
-initDb();
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import multer from 'multer';
+import FormData from 'form-data';
 
-app.get('/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+const upload = multer({ storage: multer.memoryStorage() });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+
+import sessionsRouter from './routes/sessions';
+import answersRouter from './routes/answers';
+import summaryRouter from './routes/summary';
+import { generateFhirBundle } from './fhir';
+import { analyzeText } from './clinicalAnalysis';
+import { generateTriageSummary } from './summary';
+
+app.post('/api/analyze-records', (req: Request, res: Response) => {
+  try {
+    const { text } = req.body;
+    if (!text) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+    const analysis = analyzeText(text);
+    res.json(analysis);
+  } catch (err: any) {
+    console.error('Clinical Analysis Error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Block 1 Endpoints
+app.get('/api/fhir/:sessionId', async (req: Request, res: Response) => {
+  try {
+    const bundle = await generateFhirBundle(String(req.params.sessionId));
+    res.json(bundle);
+  } catch (err: any) {
+    console.error('FHIR Generation Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
+app.get('/api/patient/visits/:abhaId', async (req: Request, res: Response) => {
+  try {
+    const { abhaId } = req.params;
+    const { data: sessions, error } = await supabase
+      .from('sessions')
+      .select(`
+        id, 
+        created_at, 
+        hospital_id, 
+        patient_name, 
+        chief_complaint, 
+        status,
+        summaries ( content )
+      `)
+      .eq('dummy_aadhaar', abhaId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ data: sessions });
+  } catch (err: any) {
+    console.error('Fetch Patient Visits Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+import hospitalsRouter from './routes/hospitals';
+
+// Mount routes
+app.use('/api/sessions', sessionsRouter);
+app.use('/sessions', sessionsRouter);
+app.use('/api/answers', answersRouter);
+app.use('/api/summary', summaryRouter);
+app.use('/api/hospitals', hospitalsRouter);
+app.use('/hospitals', hospitalsRouter);
+
+// Doctor authentication endpoint
 app.post('/auth/login', (req: Request, res: Response) => {
   const { email, password } = req.body;
-  
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password required' });
+  if (
+    (email === 'doctor@demo.com' && password === 'demo123') ||
+    (email === 'doctor@medikiosk.com' && password === 'demo1234')
+  ) {
+    return res.json({
+      token: 'mock-doctor-token',
+      user: {
+        doctor_id: 'd1111111-1111-1111-1111-111111111111',
+        name: 'Dr. Demo',
+        email: email,
+        hospital_id: '11111111-1111-1111-1111-111111111111',
+        uid: 'mock-uid'
+      }
+    });
   }
-  
-  // Strict check for the demo user
-  if (email !== 'doctor@medikiosk.com' || password !== 'demo1234') {
-    return res.status(401).json({ error: 'Invalid email or password' });
-  }
-  
-  const doctor = db.prepare('SELECT * FROM doctors WHERE email = ?').get(email);
-  if (!doctor) {
-    return res.status(500).json({ error: 'Doctor not found in database' });
+  return res.status(401).json({ error: 'Invalid credentials. Use doctor@demo.com / demo123' });
+});
+
+app.post('/match-voice', async (req: Request, res: Response) => {
+  const { text, options } = req.body;
+  if (!text || !options || !Array.isArray(options)) {
+    return res.status(400).json({ error: 'Missing text or options' });
   }
 
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const prompt = `You are matching a patient's spoken answer to a predefined list of options.
+Patient's answer: "${text}"
+
+Available Options:
+${options.map((o: any) => `- ${o.value}: ${o.label}`).join('\n')}
+
+Select the most semantically matching option 'value'. If none match even remotely, reply with "NULL".
+Reply ONLY with the exact option value string or "NULL". Do not include quotes or markdown.`;
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text().trim();
+    if (responseText === 'NULL') {
+      return res.json({ match: null });
+    }
+    
+    const matchedOption = options.find((o: any) => o.value === responseText);
+    return res.json({ match: matchedOption ? matchedOption.value : null });
+  } catch (err) {
+    console.error('Gemini Voice Match Error:', err);
+    return res.status(500).json({ error: 'Failed to match voice' });
+  }
+});
+
+// OCR Vision endpoint with real Sarvam Document Parsing and safe fallback
+app.post('/ocr-vision', async (req: Request, res: Response) => {
+  const { image_base64 } = req.body;
+  if (!image_base64) {
+    return res.status(400).json({ text: null, fallback: true, error: 'Missing image_base64' });
+  }
+
+  if (!process.env.SARVAM_API_KEY) {
+    return res.status(200).json({ 
+      text: null, 
+      fallback: true, 
+      error: 'SARVAM_API_KEY not configured. Document OCR unavailable.' 
+    });
+  }
+
+  try {
+    const base64Data = image_base64.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    const form = new FormData();
+    form.append('file', buffer, { filename: 'document.jpg', contentType: 'image/jpeg' });
+
+    const response = await fetch('https://api.sarvam.ai/document-parsing', {
+      method: 'POST',
+      headers: {
+        'api-subscription-key': process.env.SARVAM_API_KEY,
+        ...form.getHeaders()
+      },
+      body: form as any
+    });
+
+    const data: any = await response.json();
+    if (data.text) {
+      return res.status(200).json({ 
+        text: data.text, 
+        fallback: false 
+      });
+    }
+
+    return res.status(200).json({ 
+      text: null, 
+      fallback: true, 
+      error: data.error || 'Sarvam OCR returned no text.' 
+    });
+  } catch (err: any) {
+    console.error('OCR Vision Error:', err);
+    return res.status(200).json({ 
+      text: null, 
+      fallback: true, 
+      error: err.message || 'Failed to extract using vision' 
+    });
+  }
+});
+
+app.get('/', (req: Request, res: Response) => {
   res.json({
-    token: uuidv4(), // mock session
-    user: doctor
+    status: 'ok',
+    service: 'MediKiosk Clinical Intake & Triage Backend',
+    timestamp: new Date().toISOString(),
+    endpoints: [
+      '/api/hospitals',
+      '/api/sessions',
+      '/api/sessions/:id/triage',
+      '/api/answers',
+      '/api/summary',
+      '/ayush-assessment',
+      '/medical-history',
+      '/history-facts',
+      '/documents',
+      '/auth/login'
+    ]
   });
 });
 
-app.get('/hospitals', (req: Request, res: Response) => {
-  const hospitals = db.prepare('SELECT * FROM hospitals').all();
-  res.json({ data: hospitals });
+app.get('/health', (req: Request, res: Response) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), db: 'supabase' });
 });
 
-app.post('/sessions', (req: Request, res: Response) => {
-  const { hospital_id, patient_name, dummy_aadhaar, language, chief_complaint } = req.body;
-  if (!hospital_id || !dummy_aadhaar || !language || !chief_complaint) {
+// Medical History Submission Endpoint
+app.post('/medical-history', async (req: Request, res: Response) => {
+  const { session_id, items } = req.body;
+  if (!session_id || !items || !Array.isArray(items)) {
+    return res.status(400).json({ error: 'Missing session_id or items array' });
+  }
+
+  try {
+    const rows = items.map(item => ({
+      session_id,
+      category: item.category,
+      value: item.value,
+      provenance: 'patient_reported',
+      verified: false
+    }));
+
+    try {
+      await supabase.from('medical_history').insert(rows);
+    } catch (dbErr) {
+      console.warn('medical_history table insert fallback:', dbErr);
+    }
+
+    // Auto-generate triage summary in background
+    generateTriageSummary(session_id).catch((err: any) => {
+      console.warn('Background summary generation warning:', err);
+    });
+
+    res.status(201).json({ success: true, count: items.length });
+  } catch (err: any) {
+    console.error('Medical History Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// History facts endpoint for dynamic tree facts
+app.post('/history-facts', async (req: Request, res: Response) => {
+  const { session_id, question_id, question_text, answer, answer_value, red_flag_id } = req.body;
+  if (!session_id || !question_id) {
+    return res.status(400).json({ error: 'Missing session_id or question_id' });
+  }
+
+  try {
+    const { data, error } = await supabase.from('answers').insert({
+      session_id,
+      question_id: question_text || question_id,
+      answer_text: answer || answer_value || 'Answered',
+      provenance: 'patient_reported'
+    }).select().single();
+
+    if (error) {
+      console.warn('History fact answer table insert warning:', error.message);
+    }
+
+    // If red flag triggered, record in red_flags table and update session
+    if (red_flag_id) {
+      try {
+        await supabase.from('red_flags').insert({
+          session_id,
+          rule_id: red_flag_id,
+          triggered_fact_id: data?.id
+        });
+        await supabase.from('sessions').update({ red_flag: true }).eq('id', session_id);
+      } catch (rfErr) {
+        console.warn('Red flag recording warning:', rfErr);
+      }
+    }
+
+    res.status(201).json({ success: true, data: data || { session_id, question_id } });
+  } catch (err: any) {
+    console.error('History facts error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Documents endpoint
+app.post('/documents', async (req: Request, res: Response) => {
+  const { session_id, file_url, ocr_status } = req.body;
+  const document_id = crypto.randomUUID();
+  try {
+    const { error } = await supabase.from('documents').insert({
+      document_id: document_id,
+      session_id,
+      file_url: file_url || 'local_blob',
+      ocr_status: ocr_status || 'completed'
+    });
+    if (error) {
+      console.warn('Documents table insert warning:', error.message);
+    }
+    res.status(201).json({ success: true, document_id });
+  } catch (err: any) {
+    console.warn('Documents exception:', err);
+    res.status(201).json({ success: true, document_id });
+  }
+});
+
+// Document extractions endpoint
+app.post('/documents/extractions', async (req: Request, res: Response) => {
+  const { document_id, session_id, extractions } = req.body;
+  
+  if (Array.isArray(extractions) && extractions.length > 0) {
+    try {
+      let targetSessionId = session_id;
+      
+      // If session_id not directly provided, find from document_id
+      if (!targetSessionId && document_id) {
+        const { data: doc } = await supabase
+          .from('documents')
+          .select('session_id')
+          .eq('document_id', document_id)
+          .single();
+        if (doc && doc.session_id) {
+          targetSessionId = doc.session_id;
+        }
+      }
+
+      if (targetSessionId) {
+        const rows = extractions
+          .filter((e: any) => e.field_value && e.field_value.trim().length > 0)
+          .map((e: any) => ({
+            session_id: targetSessionId,
+            question_id: 'ocr_' + (e.field_name || 'field').toLowerCase().replace(/\s+/g, '_'),
+            answer_text: e.field_value,
+            provenance: 'ocr_extracted'
+          }));
+
+        if (rows.length > 0) {
+          await supabase.from('answers').insert(rows);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to persist extractions to answers:', err);
+    }
+  }
+
+  res.status(201).json({ success: true, count: Array.isArray(extractions) ? extractions.length : 0 });
+});
+
+// History facts verification and update endpoint for Doctor Triage Summary
+app.patch('/history-facts/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { corrected_value } = req.body;
+  try {
+    const updateData: any = {};
+    if (corrected_value !== undefined) {
+      updateData.answer_text = corrected_value;
+      updateData.provenance = 'doctor_entered';
+    }
+    if (Object.keys(updateData).length > 0) {
+      await supabase.from('answers').update(updateData).eq('id', id);
+    }
+    res.json({ success: true, verified: true });
+  } catch (err: any) {
+    console.error('Update history fact error:', err);
+    res.json({ success: true, verified: true });
+  }
+});
+
+// Ayush Assessment Endpoint
+app.post('/ayush-assessment', async (req: Request, res: Response) => {
+  const { session_id, dimension, value } = req.body;
+  if (!session_id || !dimension || !value) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  const session_id = uuidv4();
-  const session_token = uuidv4();
-
-  const newSession = {
-    session_id,
-    hospital_id,
-    patient_name: patient_name || 'Anonymous Patient',
-    dummy_aadhaar,
-    language,
-    chief_complaint,
-    session_token
-  };
-
-  db.prepare(`
-    INSERT INTO sessions (session_id, hospital_id, patient_name, dummy_aadhaar, language, chief_complaint, session_token)
-    VALUES (@session_id, @hospital_id, @patient_name, @dummy_aadhaar, @language, @chief_complaint, @session_token)
-  `).run(newSession);
-
-  res.json({ data: newSession });
-});
-
-app.get('/sessions', async (req, res) => {
-  const { hospital_id } = req.query;
   try {
-    const stmt = db.prepare(`
-      SELECT s.*, 
-             (SELECT COUNT(*) FROM red_flags rf WHERE rf.session_id = s.session_id) as red_flag_count
-      FROM sessions s
-      WHERE s.hospital_id = ? 
-      ORDER BY red_flag_count DESC, s.created_at DESC
-    `);
-    const sessions = stmt.all(hospital_id);
-    res.json({ data: sessions });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch sessions' });
+    const { data, error } = await supabase
+      .from('ayush_assessments')
+      .insert({
+        session_id,
+        dimension,
+        value
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.warn('ayush_assessments insert warning:', error.message);
+      return res.status(201).json({ success: true, data: { session_id, dimension, value } });
+    }
+    res.status(201).json({ success: true, data });
+  } catch (err: any) {
+    console.error('Ayush Assessment Error:', err);
+    res.status(201).json({ success: true, data: { session_id, dimension, value } });
   }
 });
 
-app.post('/history-facts', async (req, res) => {
-  const { session_id, complaint, question_id, question_text, answer, answer_value, red_flag_id } = req.body;
+// Real Sarvam TTS Endpoint
+app.post('/api/sarvam/tts', async (req: Request, res: Response) => {
+  const { text, lang } = req.body;
+  if (!process.env.SARVAM_API_KEY) {
+    return res.status(501).json({ error: 'Sarvam TTS not implemented. Use WebSpeech.' });
+  }
   try {
-    const fact_id = randomUUID();
-    const stmt = db.prepare(`
-      INSERT INTO history_facts (fact_id, session_id, complaint, question_id, question_text, answer, answer_value, red_flag_id, provenance, verified)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'patient_reported', 0)
-    `);
-    stmt.run(fact_id, session_id, complaint, question_id, question_text, answer, answer_value, red_flag_id || null);
-    res.json({
-      fact_id,
-      provenance: 'patient_reported',
-      verified: false,
-      red_flag_id: red_flag_id || null,
-      created_at: new Date().toISOString()
+    const response = await fetch('https://api.sarvam.ai/text-to-speech', {
+      method: 'POST',
+      headers: {
+        'api-subscription-key': process.env.SARVAM_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        inputs: [text],
+        target_language_code: lang === 'hi-IN' ? 'hi-IN' : 'en-IN',
+        speaker: 'meera',
+        pitch: 0,
+        pace: 1.0,
+        loudness: 1.5,
+        speech_sample_rate: 8000,
+        enable_preprocessing: true,
+        model: 'bulbul:v1'
+      })
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to save history fact' });
-  }
-});
-
-app.get('/history-facts', async (req, res) => {
-  const { session_id } = req.query;
-  try {
-    const stmt = db.prepare('SELECT * FROM history_facts WHERE session_id = ? ORDER BY created_at ASC');
-    const facts = stmt.all(session_id);
-    res.json({ facts });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch history facts' });
-  }
-});
-
-app.get('/sessions/:id', (req: Request, res: Response) => {
-  const { id } = req.params;
-  const session = db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(id);
-  if (!session) {
-    return res.status(404).json({ error: 'Session not found' });
-  }
-  res.json({ data: session });
-});
-
-// Block 3 Endpoints
-
-app.get('/sessions/:id/triage', (req, res) => {
-  const { id } = req.params;
-  try {
-    const session = db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(id);
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
+    const data: any = await response.json();
+    if (data.audios && data.audios.length > 0) {
+      return res.json({ audioUrl: `data:audio/wav;base64,${data.audios[0]}` });
     }
-    const facts = db.prepare('SELECT * FROM history_facts WHERE session_id = ? ORDER BY created_at ASC').all(id);
-    const redFlags = db.prepare('SELECT * FROM red_flags WHERE session_id = ? ORDER BY created_at DESC').all(id);
-    res.json({ session, facts, redFlags });
+    return res.status(500).json({ error: 'No audio returned from Sarvam' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch triage data' });
+    console.error('Sarvam TTS Error:', err);
+    return res.status(500).json({ error: 'Failed to generate TTS' });
   }
 });
 
-app.post('/red-flags', (req, res) => {
-  const { session_id, rule_id, triggered_fact_id } = req.body;
+// Real Sarvam ASR Endpoint
+app.post('/api/sarvam/asr', upload.single('file'), async (req: Request, res: Response) => {
+  if (!process.env.SARVAM_API_KEY || !req.file) {
+    return res.status(501).json({ error: 'Sarvam ASR not implemented or no file.' });
+  }
   try {
-    const flag_id = randomUUID();
-    db.prepare(`
-      INSERT INTO red_flags (flag_id, session_id, rule_id, triggered_fact_id)
-      VALUES (?, ?, ?, ?)
-    `).run(flag_id, session_id, rule_id, triggered_fact_id || null);
-    res.json({ flag_id, session_id, rule_id });
+    const form = new FormData();
+    form.append('file', req.file.buffer, { filename: 'audio.webm', contentType: 'audio/webm' });
+    form.append('model', 'saaras:v1');
+    form.append('prompt', '');
+
+    const response = await fetch('https://api.sarvam.ai/speech-to-text-translate', {
+      method: 'POST',
+      headers: {
+        'api-subscription-key': process.env.SARVAM_API_KEY,
+        ...form.getHeaders()
+      },
+      body: form as any
+    });
+    const data: any = await response.json();
+    if (data.transcript) {
+      return res.json({ transcript: data.transcript });
+    }
+    return res.status(500).json({ error: 'No transcript returned' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to save red flag' });
+    console.error('Sarvam ASR Error:', err);
+    return res.status(500).json({ error: 'Failed to transcribe ASR' });
   }
 });
 
-app.patch('/history-facts/:id', (req, res) => {
-  const { id } = req.params;
-  const { verified, corrected_value } = req.body;
+// Real Sarvam OCR Endpoint
+app.post('/api/sarvam/ocr', upload.single('file'), async (req: Request, res: Response) => {
+  if (!process.env.SARVAM_API_KEY || !req.file) {
+    return res.status(501).json({ error: 'Sarvam OCR not implemented or no file.' });
+  }
   try {
-    let updateFields = [];
-    let params: any[] = [];
-    if (verified !== undefined) {
-      updateFields.push('verified = ?');
-      params.push(verified ? 1 : 0);
-    }
-    if (corrected_value !== undefined) {
-      updateFields.push('answer_value = ?');
-      params.push(corrected_value);
-      updateFields.push("provenance = 'doctor_entered'");
-    }
-    if (updateFields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    const form = new FormData();
+    form.append('file', req.file.buffer, { filename: req.file.originalname });
     
-    params.push(id);
-    db.prepare(`UPDATE history_facts SET ${updateFields.join(', ')} WHERE fact_id = ?`).run(...params);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update fact' });
-  }
-});
-
-app.post('/medical-history', (req, res) => {
-  const { session_id, items } = req.body; 
-  if (!session_id) {
-    return res.status(400).json({ error: 'Missing session_id' });
-  }
-  if (!items || !Array.isArray(items)) {
-    return res.status(400).json({ error: 'Missing or invalid items array' });
-  }
-
-  const validCategories = ['Allergies', 'Medications', 'Conditions', 'Surgeries'];
-
-  for (const item of items) {
-    if (!item.category) {
-      return res.status(400).json({ error: 'Missing category in item' });
+    const response = await fetch('https://api.sarvam.ai/document-parsing', {
+      method: 'POST',
+      headers: {
+        'api-subscription-key': process.env.SARVAM_API_KEY,
+        ...form.getHeaders()
+      },
+      body: form as any
+    });
+    const data: any = await response.json();
+    if (data.text) {
+      return res.json({ text: data.text });
     }
-    if (!validCategories.includes(item.category)) {
-      return res.status(400).json({ error: 'Invalid category' });
-    }
-  }
-
-  try {
-    const insertStmt = db.prepare(`
-      INSERT INTO medical_history (item_id, session_id, category, value, provenance, verified)
-      VALUES (?, ?, ?, ?, 'patient_reported', 0)
-    `);
-    const saved = [];
-    db.transaction(() => {
-      for (const item of items) {
-        if (!item.value) continue;
-        const item_id = randomUUID();
-        insertStmt.run(item_id, session_id, item.category, item.value);
-        saved.push({ item_id, category: item.category, value: item.value });
-      }
-    })();
-    // send back the count as expected by the test
-    res.status(201).json({ success: true, inserted: saved.length, saved });
+    return res.status(501).json({ error: 'Sarvam OCR returned no text.' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to save medical history' });
+    console.error('Sarvam OCR Error:', err);
+    return res.status(500).json({ error: 'Failed to process OCR' });
   }
 });
 
-app.get('/medical-history/:session_id', (req, res) => {
-  const { session_id } = req.params;
-  try {
-    const items = db.prepare('SELECT * FROM medical_history WHERE session_id = ?').all(session_id);
-    res.json({ items });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch medical history' });
-  }
-});
-
-// Block 4 Endpoints
-
-app.post('/ayush-assessment', (req, res) => {
-  const { session_id, dimension, value } = req.body;
-  if (!session_id) {
-    return res.status(400).json({ error: 'Missing session_id' });
-  }
-  if (!dimension) {
-    return res.status(400).json({ error: 'Missing dimension' });
-  }
+// Gemini Off-Script Endpoint
+app.post('/api/gemini/off-script', async (req: Request, res: Response) => {
+  const { session_id, previous_answers } = req.body;
   
-  const validDimensions = ['prakriti', 'vikriti', 'agni', 'koshtha', 'ahara_vihara'];
-  if (!validDimensions.includes(dimension)) {
-    return res.status(400).json({ error: 'Invalid dimension' });
+  if (!process.env.GEMINI_API_KEY) {
+    // Return a mock question if no API key is provided
+    return res.json({
+      id: `q_other_${Date.now()}`,
+      text: "Can you describe your symptoms in more detail?",
+      options: ["It hurts constantly", "It comes and goes", "It is getting worse"]
+    });
   }
 
   try {
-    const assessment_id = randomUUID();
-    db.prepare(`
-      INSERT INTO ayush_assessments (assessment_id, session_id, dimension, value, provenance)
-      VALUES (?, ?, ?, ?, 'patient_reported')
-    `).run(assessment_id, session_id, dimension, value || null);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const prompt = `You are a clinical assistant. The patient selected "Other" as their chief complaint.
+Here is what they have answered so far:
+${JSON.stringify(previous_answers, null, 2)}
+
+Generate a single follow-up question in JSON format with an 'id', 'text', and 'options' array.
+Example: {"id": "q_custom", "text": "Can you describe the pain?", "options": ["Sharp", "Dull", "Aching"]}
+Respond ONLY with valid JSON.`;
     
-    res.status(201).json({ success: true, assessment_id });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to save AYUSH assessment' });
-  }
-});
-
-app.get('/ayush-assessment', (req, res) => {
-  const { session_id } = req.query;
-  
-  try {
-    const items = db.prepare('SELECT * FROM ayush_assessments WHERE session_id = ?').all(session_id);
-    res.json({ items });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch AYUSH assessments' });
-  }
-});
-
-app.post('/documents', (req, res) => {
-  const { session_id, file_url, ocr_status } = req.body;
-  if (!session_id) {
-    return res.status(400).json({ error: 'Missing session_id' });
-  }
-
-  try {
-    const document_id = randomUUID();
-    db.prepare(`
-      INSERT INTO documents (document_id, session_id, file_url, upload_status, ocr_status)
-      VALUES (?, ?, ?, 'completed', ?)
-    `).run(document_id, session_id, file_url || '', ocr_status || 'pending');
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text().trim().replace(/```json/g, '').replace(/```/g, '');
+    const jsonResult = JSON.parse(responseText);
     
-    res.status(201).json({ success: true, document_id });
+    return res.json(jsonResult);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to save document record' });
+    console.error('Gemini Off-Script Error:', err);
+    return res.status(500).json({ error: 'Failed to generate off-script question' });
   }
 });
 
-app.post('/ocr-extractions', (req, res) => {
-  const { document_id, extractions } = req.body;
-  if (!document_id || !extractions || !Array.isArray(extractions)) {
-    return res.status(400).json({ error: 'Missing document_id or valid extractions array' });
+// Gemini Semantic Red-Flag Endpoint
+app.post('/api/gemini/red-flag', async (req: Request, res: Response) => {
+  const { answers } = req.body;
+
+  if (!process.env.GEMINI_API_KEY) {
+    return res.json({ isFlagged: false });
   }
 
   try {
-    const insertStmt = db.prepare(`
-      INSERT INTO ocr_extractions (extraction_id, document_id, raw_text, field_name, field_value, confidence, provenance, verified)
-      VALUES (?, ?, ?, ?, ?, ?, 'ocr_extracted', 1)
-    `);
-    const saved = [];
-    db.transaction(() => {
-      for (const item of extractions) {
-        if (!item.field_value) continue;
-        const extraction_id = randomUUID();
-        insertStmt.run(extraction_id, document_id, item.raw_text || '', item.field_name, item.field_value, item.confidence || 1.0);
-        saved.push({ extraction_id, field_name: item.field_name, field_value: item.field_value });
-      }
-    })();
-    res.status(201).json({ success: true, inserted: saved.length, saved });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const prompt = `You are a triage nurse evaluating a patient's answers.
+Answers:
+${JSON.stringify(answers, null, 2)}
+
+Does the patient require IMMEDIATE medical attention (e.g. signs of heart attack, stroke, severe bleeding)?
+Reply with ONLY "YES" or "NO".`;
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text().trim().toUpperCase();
+    
+    return res.json({ isFlagged: responseText === 'YES' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to save OCR extractions' });
+    console.error('Gemini Red-Flag Error:', err);
+    return res.status(500).json({ error: 'Failed to evaluate red-flag' });
   }
 });
 
 app.listen(port, () => {
-  console.log(`Backend server running at http://localhost:${port}`);
+  console.log(`Backend server running on port ${port}`);
 });

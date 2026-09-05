@@ -1,14 +1,23 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import ConsentFlow from './pages/ConsentFlow';
+import ConsentFlow from './pages/Kiosk/ConsentFlow';
+import ChiefComplaint from './pages/Kiosk/ChiefComplaint';
+import FollowUp from './pages/Kiosk/FollowUp';
 import DoctorLogin from './pages/DoctorLogin';
-import DoctorDashboard from './pages/DoctorDashboard';
+import DoctorDashboard from './pages/Doctor/DoctorDashboard';
 import InterviewFlow from './pages/InterviewFlow';
 import MedicalHistoryFlow from './pages/MedicalHistoryFlow';
 import DocumentUploadFlow from './pages/DocumentUploadFlow';
 import AyushFlow from './pages/AyushFlow';
 import TriageSummary from './pages/TriageSummary';
+import RedFlagLock from './pages/Kiosk/RedFlagLock';
+import PatientSubmitted from './pages/Kiosk/PatientSubmitted';
+import PatientLogin from './pages/Patient/PatientLogin';
+import PatientDashboard from './pages/Patient/PatientDashboard';
+import AdminHospitals from './pages/Admin/AdminHospitals';
+import { AccessibilityProvider } from './contexts/AccessibilityContext';
+import { AccessibilityToggle } from './components/AccessibilityToggle';
 
 function AppRoutes() {
   const location = useLocation();
@@ -65,16 +74,31 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<Navigate to="/consent" replace />} />
         <Route path="/consent" element={<ConsentFlow />} />
+        <Route path="/chief-complaint" element={<ChiefComplaint />} />
+        <Route path="/follow-up" element={<FollowUp />} />
         <Route path="/interview" element={<InterviewFlow />} />
         <Route path="/ayush-assessment" element={<AyushFlow />} />
+        <Route path="/ayush" element={<AyushFlow />} />
         <Route path="/records-upload" element={<DocumentUploadFlow />} />
+        <Route path="/upload" element={<DocumentUploadFlow />} />
+        <Route path="/red-flag-alert" element={<RedFlagLock />} />
+        <Route path="/submitted" element={<PatientSubmitted />} />
         <Route path="/medical-history" element={<MedicalHistoryFlow />} />
         
+        {/* Patient Portal Routes */}
+        <Route path="/patient/login" element={<PatientLogin />} />
+        <Route path="/patient/dashboard" element={<PatientDashboard />} />
+        <Route path="/patient" element={<Navigate to="/patient/dashboard" replace />} />
+
         {/* Doctor Routes */}
         <Route path="/doctor/login" element={<DoctorLogin />} />
         <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
         <Route path="/doctor/triage/:sessionId" element={<TriageSummary />} />
         <Route path="/doctor" element={<Navigate to="/doctor/dashboard" replace />} />
+
+        {/* Admin Routes */}
+        <Route path="/admin" element={<Navigate to="/admin/hospitals" replace />} />
+        <Route path="/admin/hospitals" element={<AdminHospitals />} />
       </Routes>
     </>
   );
@@ -82,9 +106,12 @@ function AppRoutes() {
 
 function App() {
   return (
-    <Router>
-      <AppRoutes />
-    </Router>
+    <AccessibilityProvider>
+      <Router>
+        <AppRoutes />
+        <AccessibilityToggle />
+      </Router>
+    </AccessibilityProvider>
   );
 }
 

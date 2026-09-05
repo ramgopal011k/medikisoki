@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { MandalaBackground } from '@/components/MandalaBackground';
 import { QuestionCard } from '@/components/QuestionCard';
+import { API_URL } from '@/lib/api';
 
 export default function DoctorLogin() {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ export default function DoctorLogin() {
     setError('');
 
     try {
-      const res = await fetch('http://localhost:3001/auth/login', {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -83,8 +84,37 @@ export default function DoctorLogin() {
             {error && <p className="text-danger text-sm text-center mt-2">{error}</p>}
           </form>
 
-          <div className="mt-8 text-center">
-            <Button variant="link" onClick={() => navigate('/consent')} className="text-muted hover:text-charcoal flex items-center gap-2 justify-center w-full">
+          {import.meta.env.DEV && (
+            <div className="mt-4">
+              <Button
+                variant="outline"
+                className="w-full h-[64px] rounded-[12px] text-xl font-body border-2 border-primary text-primary hover:bg-primary hover:text-white transition"
+                onClick={() => {
+                  localStorage.setItem('doctor_token', 'dev_bypass_token');
+                  localStorage.setItem('doctor_info', JSON.stringify({ 
+                    doctor_id: 'd1111111-1111-1111-1111-111111111111',
+                    name: 'Dr. Dev Bypass', 
+                    email: 'doctor@demo.com',
+                    hospital_id: '11111111-1111-1111-1111-111111111111',
+                    uid: 'mock-uid'
+                  }));
+                  navigate('/doctor/dashboard');
+                }}
+              >
+                Dev Bypass Login
+              </Button>
+            </div>
+          )}
+
+          <div className="mt-6 pt-6 border-t border-warmgray flex flex-col gap-2 text-center">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/admin/hospitals')} 
+              className="border-warmgray hover:border-primary/40 text-charcoal hover:text-primary rounded-xl h-11 text-sm font-semibold"
+            >
+              🏥 Admin Hospital Management Portal
+            </Button>
+            <Button variant="link" onClick={() => navigate('/consent')} className="text-muted hover:text-charcoal flex items-center gap-2 justify-center w-full text-xs mt-1">
               <span>&larr;</span> Back to Patient Flow
             </Button>
           </div>

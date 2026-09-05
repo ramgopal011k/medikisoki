@@ -1,0 +1,290 @@
+<USER_REQUEST>
+# MediKiosk — Master Solo Build Prompt (Antigravity + MCP Edition)
+**AI Clinical History Kiosk for Indian Public Hospital OPDs (incl. AYUSH)**
+Builder: 1 person + Antigravity agent missions. Single source of truth — supersedes the 48h 2-person v3 brief and the earlier Solo brief.
+
+Deployment model: no continuous deployment from hour 0. Git is local-only through Block 7; the remote is connected and the app deployed exactly once, as the last action in Block 8.
+
+---
+
+## 1. Build Model & Ground Rules
+
+- No Person A / Person B split. You are the sole product owner and integrator.
+- The **root agent** (your main Antigravity conversation thread) acts as the sole executor: it works each mission in sequence, validates the output, and runs verification before merge.
+- Antigravity runs scoped **missions**, each with a defined exit criterion (§10), an owned slice of the codebase, and a required diff review by you before merge — especially for the three spine modules: adaptive interview branching, OCR field-extraction, hospital data shape.
+- Missions with genuinely independent, bounded scopes (Block 1's hospital-selection UI vs. consent flow; Block 4's AYUSH screens vs. OCR pipeline) can be worked in either order, since neither depends on the other's output. The spine modules — interview branching (Block 2) and summary assembly (Block 6) — are strictly serial: run directly by the root agent, one step depending on the last, never split apart.
+- Long blocking setup work (dependency installs, migrations) runs in the background so it doesn't stall progress on other scaffolding tasks.
+- One running `.agent/types/` schema file (§5) is the source of truth every mission reads from.
+- Test OCR and voice flows via Antigravity's browser/artifact surface with real uploads and real mic prompts — never mock these two.
+
+---
+
+## 2. Design System / UI Tokens (locked — build Block 0 against this)
+
+| Token | Value |
+|---|---|
+| Font | Inter — 20px base (kiosk-scale body text), 28–36px headings |
+| Primary / action color | `#007BFF` |
+| Success / verified color | `#28A745` |
+| Danger / red-flag color | `#DC3545` |
+| Neutrals | Tailwind's default gray scale (no custom neutral palette) |
+| Component library | **shadcn/ui** (Radix primitives + Tailwind) — components copied into the repo, not an npm dependency, to keep the kiosk bundle lean |
+| Spacing | Tailwind default scale (4px base unit); no custom spacing tokens |
+| Min touch target | **64px** (kiosk hardware, larger than standard mobile 44–48px) |
+| Accessibility standard | **WCAG AA**: ≥4.5:1 contrast for body text, ≥3:1 for large text/UI components, visible focus states on every interactive element, status never conveyed by color alone — provenance badges and red-flag indicators always pair color with an icon + text label |
+
+Status/provenance badge colors map onto §8's four categories; assign consistently (e.g. `system_derived` → primary blue, `doctor_entered`/verified → success green, unverified/red-flag → danger red) — lock the exact mapping in `.agent/decisions.md` in Block 0, don't leave it to per-screen judgment later.
+
+---
+
+## 3. Coordination Folder — Planning Layer
+
+Your planning layer lives in `.agent/`:
+
+```
+.agent/                   # your planning layer
+  missions/                # one file per mission — scope, owned paths, exit criteria (copied from §10)
+  types/                   # source-of-truth schema: provenance enum, hospital schema, fact record shapes (§5)
+  decisions.md              # running log of design decisions made mid-build (append-only)
+  mcp-config.md             # which MCP servers are connected and what each mission may use them for
+```
+
+Every mission is drafted in `.agent/missions/` as a human-readable brief derived from §10, before work on it begins.
+
+---
+
+## 4. MCP Servers In Use
+
+| MCP server | Used for | When |
+|---|---|---|
+| Filesystem MCP | Scaffolding project structure, reading/writing `.agent/types/` | All blocks |
+| Browser MCP (Antigravity's own) | Live-testing consent audio, OCR upload, mic permission flows | Blocks 1, 4, 7, 8 |
+| Stitch MCP | Google's AI UI-generation tool — `extract_design_context` to lock the §2 tokens as reusable "Design DNA", `generate_screen_from_text` to produce initial screen mockups before a frontend mission builds the real components | Block 0, then as-needed per screen |
+| Obsidian MCP | Mirrors `.agent/decisions.md` and each block's completion notes into the existing Obsidian vault (`claude/MediKiosk/`) so this build stays consistent with the earlier 41-file doc set | End of each block (optional, lightweight) |
+| GitHub MCP | Repo push, remote branch ops | **Block 8 only** |
+| Railway MCP | Backend service provisioning, environment variables, deploy triggers, build/deploy log checks | **Block 8 only** |
+
+No Supabase MCP — schema migrations, Auth setup, and Realtime channel wiring (Blocks 0–6) are done directly in code via the Supabase JS client/CLI, not through an MCP tool.
+
+**Stitch MCP is unrelated to Railway MCP / GitHub MCP** — Stitch is Google's text-to-UI design generator, used only for screen mockups/design-token consistency; it never touches deployment or infra.
+
+Missions must not use GitHub MCP or Railway MCP to push/deploy before Block 8; local `git commit` only until then.
+
+---
+
+## 5. Data Model
+
+Source of truth lives at `.agent/types/schema.md`, seeded with this table before any mission starts:
+
+| Table | Key columns | Relationship |
+|---|---|---|
+| `hospitals` | `hospital_id` PK, `hospital_name`, `location`, `hospital_type` | 1—N `sessions` |
+| `doctors` | `doctor_id` PK, `name`, `email`, `hospital_id` FK, Supabase auth `uid` | N—1 `hospitals` |
+| `sessions` | `session_id` PK, `hospital_id` FK, `patient_name`, `dummy_aadhaar`, `language`, `session_token`, `created_at` | 1—N facts/history/documents/flags; 1—1 `summaries` |
+| `history_facts` | `fact_id` PK, `session_id` FK, `complaint`, `question_id`, `answer`, `provenance`, `verified`, `created_at` | N—1 `sessions` |
+| `medical_history` | `item_id` PK, `session_id` FK, `category` (condition/medication/allergy/surgery/hospitalization/family_history), `value`, `provenance`, `verified` | N—1 `sessions` |
+| `ayush_assessments` | `assessment_id` PK, `session_id` FK, `dimension` (prakriti/vikriti/agni/koshtha/ahara_vihara), `value`, `provenance` | N—1 `sessions` |
+| `documents` | `document_id` PK, `session_id` FK, `file_url`, `upload_status`, `ocr_status`, `created_at` | N—1 `sessions`; 1—N `ocr_extractions` |
+| `ocr_extractions` | `extraction_id` PK, `document_id` FK, `raw_text`, `field_name`, `field_value`, `confidence`, `corrected_value`, `provenance`, `verified` | N—1 `documents` |
+| `red_flags` | `flag_id` PK, `session_id` FK, `rule_id`, `triggered_fact_id`, `created_at`, `acknowledged_by`, `acknowledged_at` | N—1 `sessions` |
+| `summaries` | `summary_id` PK, `session_id` FK, `generated_at`, `finalized` | 1—1 `sessions`; 1—N `summary_fields` |
+| `summary_fields` | `field_id` PK, `summary_id` FK, `section` (1–9, §13), `label`, `value`, `provenance`, `verified`, `edited_by` | N—1 `summaries` |
+
+---
+
+## 6. Seed Data — Sample Hospital Records
+
+Placeholder demo data for `hospitals` (swap for real records if available before the demo):
+
+| hospital_id | hospital_name | location | hospital_type |
+|---|---|---|---|
+| H001 | Govt. General Hospital, Sector 12 | Chandigarh | Government General Hospital |
+| H002 | Community Health Centre, Rajpura | Punjab | Community Health Centre |
+| H003 | Central AYUSH Hospital | New Delhi | AYUSH Hospital |
+| H004 | State Ayurvedic Hospital | Jaipur | Ayurvedic Hospital |
+| H005 | District Allopathy Hospital | Lucknow | Government Allopathy Hospital |
+
+---
+
+## 7. Scope — Merged MUST (demo fails without these)
+
+1. Doctor/triage login (Supabase Auth, real)
+2. Hospital selection: seeded list (§6) with `hospital_id`, `hospital_name`, `location`, `hospital_type`, spanning allopathic and AYUSH types — real selection UI
+3. Patient session start via `POST /sessions`: language select (EN/HI text) → hospital select → dummy-Aadhaar entry → audio-explained consent, full touch fallback — completable in either language, with or without mic access
+4. Adaptive structured interview (SOCRATES-style), real branching across the six fixed chief complaints (§10 Block 2) — next question depends on previous answer — `POST /history-facts` tagged `patient_reported`/`verified:false` — fully completable via touch alone
+5. Dedicated Medical History module, stored separately, `patient_reported`/`verified:false`
+6. Mandatory AYUSH mode — abridged Dashavidha Pariksha, five structured screens
+7. Real OCR: actual upload → actual Tesseract.js run on the actual file → candidate fields for manual selection/correction → original file always preserved; failed/low-confidence processing preserves the original, flags the failure, routes to manual doctor review
+8. Template-based structured summary — no LLM free-text, field assembly with provenance highlighting; patient sees a "submitted, please wait" screen once assembly is confirmed working
+9. Provenance on every fact using exactly four categories (§9) — no `ai_inferred`
+10. Always-on deterministic red-flag rule engine → Realtime push to dashboard, locked patient message (§8)
+11. Doctor dashboard: 9-way separated view (§13), edit/verify fields (`PATCH`, flips to `doctor_entered`/`verified:true`), acknowledge red flags, hospital-scoped view
+12. Hindi text across core patient-facing screens, centralized language files
+13. §2 design tokens and WCAG AA accessibility applied across every patient-facing screen
+
+### SHOULD (cut first if timeline slips)
+Hindi voice/ASR · multi-patient triage queue · PDF/print export
+
+### STRETCH
+Google Vision handwritten-OCR fallback · FHIR-shaped JSON export stub · drug-interaction/abnormal-lab flagging
+
+---
+
+## 8. Design Decisions to Lock
+
+**Patient login stays lightweight.** Real Supabase Auth is doctor/triage-only. Patients: name + dummy Aadhaar → anonymous session token. No password/OTP for patients.
+
+**Session token format:** random **UUIDv4**, generated server-side, stored in `sessions.session_token`. **Not a JWT** — no client-side claims to verify; every patient-facing request does a single DB lookup against `sessions`. Simpler to implement correctly under time pressure and matches the "anonymous session token" intent — there's nothing sensitive enough in the token payload to justify signing/verification complexity.
+
+**"Adaptive" = the tree actually changes.** Explicit decision tree per complaint (question N's answer determines question N+1) — a linear questionnaire with reworded headers does not qualify.
+
+**"Real OCR" = runs on the real uploaded file, every time.** Never a pre-baked demo result swapped in behind the scenes.
+
+**Summary highlighting = provenance badges, not AI prose.** Template fill only. AI-generated summary prose later is an explicit scope change, not something to fold in silently.
+
+**Locked red-flag patient message (verbatim, do not improvise):**
+> "Important information has been identified. Please notify hospital staff or wait for assistance."
+
+The engine must never present a diagnosis, claim certainty, recommend treatment, or otherwise alarm the patient beyond that message.
+
+---
+
+## 9. Provenance Categories (Reference)
+
+| Category | Meaning |
+|---|---|
+| `patient_reported` | Directly entered/spoken by the patient |
+| `ocr_extracted` | Extracted from an uploaded document via OCR |
+| `system_derived` | Deterministic output — rules, calculations, template assembly, red-flag logic |
+| `doctor_entered` | Entered or verified by doctor/triage staff |
+
+---
+
+## 10. Solo Build Plan (~60 Hours, Sequential Blocks)
+
+### Block 0 — Foundation (Hours 0–3)
+Vite+React+TS+Tailwind; Express+TS+Supabase schema. `git init` locally (no remote yet). Set up the `.agent/` folder (§3). Seed `.agent/types/schema.md` with §5. Kick off `npm install` for both frontend and backend in the background so scaffolding work isn't blocked on it. Use Stitch MCP to extract/lock the §2 design tokens as Design DNA and generate first-pass mockups for the login, hospital-select, and consent screens. `/health` check passes **locally**.
+- **Endpoints:** none yet (scaffolding only)
+- **Testing:** none yet
+
+### Block 1 — Login, Hospital Selection, Session Start (Hours 3–10)
+Doctor login. Hospital table seeded with §6's records + selection screen. Patient flow: language → hospital select → dummy-Aadhaar → audio consent w/ touch fallback → chief-complaint picker.
+*Missions (independent, no shared files — work in either order):* `hospital-select.md` (hospital seed+selection UI) and `consent-flow.md` (dummy-ID/consent flow).
+- **Endpoints:** `POST /auth/login` (doctor), `GET /hospitals`, `POST /sessions`, `GET /sessions/:id`
+- **Error states:** hospital list fetch fails → show cached/last-known list with a retry banner, never a blank screen; malformed dummy-Aadhaar input → inline validation, non-blocking
+- **Exit:** doctor logs in live-locally; patient reaches consent in either language, with or without mic, all persisted with a session token
+
+### Block 2 — Adaptive Interview Engine (Hours 10–20)
+Spine module — don't parallelize against itself. Branching trees for the **six fixed chief complaints: chest pain, fever, abdominal pain, headache, back pain, cough**. Voice + tap-to-answer, touch-first.
+- **Endpoints:** `POST /history-facts`, `GET /history-facts?session_id=`
+- **Error states:** connectivity drop mid-interview → autosave the draft locally, resume without data loss on reconnect
+- **Testing:** Vitest unit tests on the branching-tree logic for all six complaints (this is the module most likely to "look right but branch wrong")
+- **Exit:** two different answers to the same early question produce two different subsequent questions; fully completable via touch alone
+
+### Block 3 — Medical History Module (Hours 20–24)
+Stand-alone structured module, stored separately from interview facts.
+- **Endpoints:** `POST /medical-history`, `GET /medical-history?session_id=`
+- **Error states:** partial submission (session interrupted mid-entry) → items already saved remain individually queryable; no all-or-nothing transaction required
+- **Exit:** submissions queryable as their own category, never merged into interview data
+
+### Block 4 — AYUSH Mode + Real OCR Pipeline (Hours 24–35)
+AYUSH toggle, five screens. Real Tesseract.js on real uploads → candidate fields for correction → original file/text/fields/corrections/status/verification preserved as distinct records.
+*Missions (independent — work in either order):* `ayush-screens.md` and `ocr-pipeline.md`; review OCR's diff against a real scan yourself before merge.
+- **Endpoints:** `POST /ayush-assessment`, `POST /documents` (multipart upload), `POST /documents/:id/ocr` (trigger processing), `PATCH /documents/:id/fields` (manual correction)
+- **Error states:** unsupported file type or oversized upload → reject with a clear message before OCR runs; OCR failure/low confidence → preserve original, flag failure, route to manual doctor review (already a MUST, §7.7)
+- **Testing:** unit tests against 2–3 fixture prescription images (known-good OCR baseline) plus Playwright (via Browser MCP) exercising a real file upload end-to-end
+- **Exit:** AYUSH submits 5 facts; a real prescription image yields ≥3 correctly extractable fields; a corrupted upload preserves the original and routes to manual review
+
+### Block 5 — Red-Flag Engine + Realtime Dashboard Alerting (Hours 35–42)
+Always-on rule engine on every fact write, tagging `system_derived`. On match: save, create event, broadcast via Supabase Realtime, show the §8 locked message.
+- **Endpoints:** `GET /red-flags?session_id=`, `PATCH /red-flags/:id/acknowledge`; realtime channel `red-flags:{hospital_id}` (Supabase Realtime, not REST)
+- **Error states:** Realtime channel disconnects → dashboard shows a "reconnecting" banner and falls back to polling every 5s
+- **Testing:** Vitest unit tests covering every rule in the engine individually — this module is deterministic by design, so untested rules are a correctness bug, not a coverage gap
+- **Exit:** a red flag mid-interview appears on a second device within ~2s, no refresh; patient never sees more than the locked message
+
+### Block 6 — Summary Assembly + Doctor Dashboard (Hours 42–50)
+Template-fill summary endpoint; `PATCH` for doctor edits; hospital-scoped patient list; patient-facing "submitted, please wait" screen. Dashboard implementing the §13 rule with provenance badges, inline edit, verify checkboxes, access to original documents.
+- **Endpoints:** `POST /summary/:session_id/generate`, `GET /summary/:session_id`, `PATCH /summary/:session_id/fields/:field_id`, `GET /patients?hospital_id=`
+- **Error states:** generation hits a required-but-missing field → surface which of the nine sections is incomplete and block "finalize" until resolved, without blocking dashboard viewing of what's already assembled
+- **Exit:** every fact under its correct one of nine sections with correct provenance; hospital filter scoped correctly; nothing bleeds between sections unlabeled
+
+### Block 7 — Hindi Text Pass + Voice Enhancement (Hours 50–54)
+Every core screen from centralized language files, zero hardcoded English. Hindi voice (`hi-IN` or Bhashini) layered on top as enhancement.
+- **Endpoints:** none — language files are static frontend JSON, not served via API
+- **Error states:** missing translation key → fall back to the English string and log the missing key; never render a blank or broken label
+- **Exit:** full patient run-through in Hindi text with zero mic access; a second run demonstrates voice as add-on, not dependency
+
+### Block 8 — Polish, Hardening, Rehearsal, Deploy (Hours 54–60)
+Error boundaries, loading/empty states, confirmed automatic mic-denied fallback everywhere, seed 1–2 canned demo patients, script and rehearse. **Then, as the final action:** add git remote, push, connect Vercel (frontend) + Railway (backend) + Supabase, verify `/health` live.
+- **Endpoints:** `GET /health`
+- **Error states:** any uncaught render error → global error boundary shows the calm fallback screen, session state preserved, error logged to console (never surfaced to the patient)
+- **Testing:** Playwright end-to-end run (via Browser MCP) covering a full patient session, tied directly into rehearsal
+- **Exit:** three consecutive clean local run-throughs, zero unhandled errors, recording saved; app live at a public URL — the only point in the build where deploy happens
+
+---
+
+## 11. Priority Order If Short on Hours
+
+1. Hindi voice (Block 7's voice layer) — drop entirely; Hindi text stays a MUST.
+2. Multi-patient queue, PDF export — drop freely.
+3. Hospital-scoped dashboard filtering — fall back to one hardcoded hospital, but keep at least one allopathic and one AYUSH hospital in the seed data.
+4. **Never cut:** adaptive branching (Block 2), real OCR on real uploads (Block 4), red-flag engine (Block 5), 9-way provenance-separated summary (Block 6).
+
+---
+
+## 12. Final Information Separation Rule (Doctor Dashboard)
+
+Exactly nine sections, never silently merged:
+1. Patient Information
+2. Current Complaint and Adaptive Interview
+3. Medical History Provided by Patient
+4. AYUSH Assessment
+5. Medical Documents (with access to the original uploaded file)
+6. OCR-Extracted Information
+7. System-Derived Information
+8. Red Flags
+9. Doctor Notes and Verification
+
+This is an information collection/organization/triage-support tool for healthcare professionals — not a diagnostic or treatment system. No screen should imply otherwise.
+
+---
+
+## 13. Unchanged / Confirmed Tech Reference
+
+Vite+React+TS+Tailwind (frontend) · shadcn/ui (components) · Express+TS (backend) · Supabase (DB/Auth/Realtime) · Tesseract.js (OCR) · Web Speech API / Bhashini (Hindi ASR, optional) · Vitest (unit tests) · Playwright (e2e, via Browser MCP) · Vercel (frontend host) · Railway (backend host) — all hosting connected only at Block 8's deploy step, per §1. use stitch mcp and obsidian mcp and creat it  ### Subagents Are Optional
+
+Use them only when:
+1. The task is long-running and blocking (setup, migrations)
+2. The task is an independent UI screen with zero file overlap — e.g., hospital selection screen vs. consent flow screen (Block 1) touch completely different files and have no shared components
+3. The task has a clear, binary pass/fail exit criterion
+
+### Never Subagent (Root Agent Handles Directly)
+
+- Adaptive interview branching (Block 2)
+- Red-flag rule engine (Block 5)
+- Summary assembly (Block 6)
+- OCR pipeline (Block 4) — despite being flagged "parallel-safe"
+
+### Subagent Workflow
+
+1. Root agent defines mission in `.agent/missions/`
+2. Subagent receives: mission file, owned file paths, exit criteria
+3. Subagent executes and commits work locally
+4. Subagent returns: diff, test results, exit criteria verification
+5. Root agent reviews diff
+6. If passed → merge; if failed → discard, root agent re-does
+
+**Critical:** The build never depends on subagent success. If a subagent fails or produces questionable output, discard it entirely and the root agent completes the work directly.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-01T20:07:53+05:30.
+
+The user's current state is as follows:
+Active Document: c:\Users\kramg\.gemini\config\mcp_config.json (LANGUAGE_JSON)
+Cursor is on line: 1
+Other open documents:
+- c:\Users\kramg\.gemini\config\mcp_config.json (LANGUAGE_JSON)
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from None to Gemini 3.1 Pro (High). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>

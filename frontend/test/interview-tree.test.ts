@@ -166,10 +166,10 @@ describe('Interview Trees Branching Logic', () => {
       expect(next).toBe('cough_color');
     });
 
-    it('routes dry cough to associated symptoms', () => {
+    it('routes dry cough to timing / triggers question', () => {
       const tree = getInterviewTree('Cough');
       const next = tree!.questions['cough_type'].next('dry');
-      expect(next).toBe('cough_associated');
+      expect(next).toBe('cough_timing');
     });
 
     it('routes bloody phlegm to red flag', () => {
@@ -184,6 +184,39 @@ describe('Interview Trees Branching Logic', () => {
       const next = tree!.questions['cough_associated'].next(['breathless']);
       expect(isRedFlag(next)).toBe(true);
       if (isRedFlag(next)) expect(next.flag_id).toBe('cough_severe_breathlessness');
+    });
+
+    it('routes clear phlegm to cough timing', () => {
+      const tree = getInterviewTree('Cough');
+      const next = tree!.questions['cough_color'].next('clear');
+      expect(next).toBe('cough_timing');
+    });
+  });
+
+  describe('Other / General Tree', () => {
+    it('routes description to duration', () => {
+      const tree = getInterviewTree('Other');
+      const next = tree!.questions['q1_description'].next('body ache');
+      expect(next).toBe('q2_duration');
+    });
+
+    it('routes duration to severity scale', () => {
+      const tree = getInterviewTree('Other');
+      const next = tree!.questions['q2_duration'].next('this_week');
+      expect(next).toBe('q3_severity');
+    });
+
+    it('routes severity to systemic symptoms', () => {
+      const tree = getInterviewTree('Other');
+      const next = tree!.questions['q3_severity'].next('7');
+      expect(next).toBe('q4_systemic');
+    });
+
+    it('routes severe dizziness in systemic check to red flag', () => {
+      const tree = getInterviewTree('Other');
+      const next = tree!.questions['q4_systemic'].next(['dizziness']);
+      expect(isRedFlag(next)).toBe(true);
+      if (isRedFlag(next)) expect(next.flag_id).toBe('general_severe_dizziness');
     });
   });
 

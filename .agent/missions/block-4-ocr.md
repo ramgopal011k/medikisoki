@@ -1,3 +1,4 @@
+
 # Block 4 (Part B): Real OCR Pipeline
 
 ## Scope

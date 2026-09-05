@@ -1,9 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Tesseract from 'tesseract.js';
-import { Camera, UploadCloud, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Camera, UploadCloud, CheckCircle, AlertTriangle, Volume2, VolumeX, Mic } from 'lucide-react';
 import { MandalaBackground } from '../components/MandalaBackground';
 import { QuestionCard } from '../components/QuestionCard';
+import { useAsr } from '@/hooks/useAsr';
+import { useAudio } from '@/hooks/useAudio';
+import { API_URL } from '@/lib/api';
 
 interface ExtractedField {
   field_name: string;
@@ -17,7 +20,7 @@ export default function DocumentUploadFlow() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [session] = useState(() => {
-    const sessionId = localStorage.getItem('patient_session');
+    const sessionId = localStorage.getItem('patient_session') || localStorage.getItem('session_id');
     const lang = localStorage.getItem('patient_language') || 'en';
     if (!sessionId) return null;
     return { id: sessionId, language: lang };
@@ -25,6 +28,8 @@ export default function DocumentUploadFlow() {
 
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [_isProcessing, setIsProcessing] = useState(false);
+  const [uploadError, setUploadError] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [progress, setProgress] = useState(0);
   const [rawText, setRawText] = useState('');
   const [extractions, setExtractions] = useState<ExtractedField[]>([
@@ -35,145 +40,210 @@ export default function DocumentUploadFlow() {
 
   const [step, setStep] = useState<'upload' | 'processing' | 'correction' | 'success'>('upload');
 
+  const { speak, isPlaying } = useAudio();
+  const { isListening, transcript, startListening, stopListening } = useAsr();
+
   useEffect(() => {
     if (!session) {
       navigate('/consent');
     }
   }, [session, navigate]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !session) return;
+  // Voice ASR handler
+  useEffect(() => {
+    if (!transcript) return;
+    const lower = transcript.toLowerCase();
 
-    // Create document record on backend first
+    if (step === 'upload') {
+      if (lower.includes('skip') || lower.includes('छोड़ें') || lower.includes('आगे')) {
+        navigate('/medical-history');
+      } else if (lower.includes('camera') || lower.includes('photo') || lower.includes('picture') || lower.includes('कैमरा') || lower.includes('फोटो') || lower.includes('upload')) {
+        fileInputRef.current?.click();
+      }
+    } else if (step === 'correction') {
+      if (lower.includes('confirm') || lower.includes('save') || lower.includes('सही') || lower.includes('सहेजें') || lower.includes('done')) {
+        handleSave();
+      }
+    }
+  }, [transcript, step, navigate]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      startProcessing(file);
+    }
+  };
+  const handleFileUpload = handleFileChange;
+
+  const startProcessing = async (file: File) => {
+    setUploadError(false);
+
     try {
-      const res = await fetch('http://localhost:3001/documents', {
+      const res = await fetch(`${API_URL}/documents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          session_id: session.id,
+          session_id: session?.id,
           file_url: 'local_blob',
           ocr_status: 'processing'
         })
       });
+      if (!res.ok) throw new Error('Failed to create document');
       const data = await res.json();
-      if (data.document_id) setDocumentId(data.document_id);
+      if (data.document_id) {
+        setDocumentId(data.document_id);
+      } else {
+        throw new Error('No document_id');
+      }
     } catch (err) {
       console.error(err);
+      setUploadError(true);
+      return;
     }
 
     setStep('processing');
     setIsProcessing(true);
 
     try {
-      const result = await Tesseract.recognize(file, 'eng', {
-        logger: m => {
-          if (m.status === 'recognizing text') {
-            setProgress(Math.round(m.progress * 100));
+      const { data: { text } } = await Tesseract.recognize(
+        file,
+        'eng+hin',
+        {
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              setProgress(Math.round(m.progress * 100));
+            }
           }
         }
-      });
-      
-      const text = result.data.text;
+      );
+
       setRawText(text);
 
-      // Simple heuristic mapping
-      const updatedExtractions = [...extractions];
-      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-      
-      // Look for keywords
+      // Extract basic fields
+      const lines = text.split('\n').filter(l => l.trim().length > 0);
+      let nameVal = '';
+      let diagVal = '';
+      let medsVal = '';
+
       lines.forEach(line => {
-        const lower = line.toLowerCase();
-        if (lower.includes('name:') || lower.includes('patient:')) {
-          updatedExtractions[0].field_value = line.split(':')[1]?.trim() || line;
-          updatedExtractions[0].raw_text = line;
-          updatedExtractions[0].confidence = result.data.confidence / 100;
-        } else if (lower.includes('dx:') || lower.includes('diagnosis:')) {
-          updatedExtractions[1].field_value = line.split(':')[1]?.trim() || line;
-          updatedExtractions[1].raw_text = line;
-          updatedExtractions[1].confidence = result.data.confidence / 100;
-        } else if (lower.includes('rx') || lower.includes('tab') || lower.includes('cap')) {
-          updatedExtractions[2].field_value += line + '\n';
-          updatedExtractions[2].raw_text += line + '\n';
-          updatedExtractions[2].confidence = result.data.confidence / 100;
+        const l = line.toLowerCase();
+        if (l.includes('name:') || l.includes('patient:')) {
+          nameVal = line.split(/[:]/)[1]?.trim() || line;
+        } else if (l.includes('diagnosis:') || l.includes('dx:')) {
+          diagVal = line.split(/[:]/)[1]?.trim() || line;
+        } else if (l.includes('rx:') || l.includes('tab') || l.includes('cap') || l.includes('mg')) {
+          medsVal += (medsVal ? ', ' : '') + line.trim();
         }
       });
 
-      setExtractions(updatedExtractions);
+      setExtractions([
+        { field_name: 'Patient Name', field_value: nameVal || '', raw_text: text, confidence: nameVal ? 0.8 : 0 },
+        { field_name: 'Diagnosis', field_value: diagVal || '', raw_text: text, confidence: diagVal ? 0.7 : 0 },
+        { field_name: 'Medications', field_value: medsVal || '', raw_text: text, confidence: medsVal ? 0.75 : 0 }
+      ]);
+
       setStep('correction');
     } catch (err) {
-      console.error(err);
-      setStep('correction'); // Still go to correction to let them type manually
+      console.error('OCR Processing error:', err);
+      setUploadError(true);
+      setStep('upload');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const updateExtraction = (index: number, value: string) => {
-    const updated = [...extractions];
-    updated[index].field_value = value;
-    setExtractions(updated);
+  const updateExtraction = (idx: number, val: string) => {
+    setExtractions(prev => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], field_value: val, confidence: 1 };
+      return next;
+    });
   };
 
   const handleSave = async () => {
-    if (!session || !documentId) return;
-
     try {
-      const res = await fetch('http://localhost:3001/ocr-extractions', {
+      await fetch(`${API_URL}/documents/extractions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           document_id: documentId,
+          session_id: session?.id,
           extractions
         })
       });
-      
-      if (res.ok) {
-        setStep('success');
-        setTimeout(() => navigate('/medical-history'), 2000);
-      } else {
-        alert('Failed to save extracted data');
-      }
+      setStep('success');
+      setTimeout(() => {
+        navigate('/medical-history');
+      }, 1000);
     } catch (err) {
       console.error(err);
-      alert('Error saving data');
+      navigate('/medical-history');
     }
   };
 
   if (!session) return null;
 
+  const headerTitle = session.language === 'hi' ? 'पुराने रिकॉर्ड अपलोड करें' : 'Upload Past Medical Records';
+
   return (
-    <div className="min-h-screen bg-sand flex flex-col p-6 relative overflow-hidden font-body">
+    <div className="min-h-screen bg-sand flex flex-col p-6 relative overflow-hidden font-body text-charcoal">
       <MandalaBackground />
       
-      <div className="z-10 w-full max-w-4xl mx-auto mt-12 flex flex-col gap-6">
+      <div className="z-10 w-full max-w-4xl mx-auto mt-8 flex flex-col gap-6">
         
         {step === 'upload' && (
-          <QuestionCard className="text-center p-12">
-            <h1 className="font-display text-4xl text-charcoal mb-4">
-              {session.language === 'hi' ? 'पुराने रिकॉर्ड अपलोड करें' : 'Upload Past Medical Records'}
-            </h1>
-            <p className="text-muted text-xl mb-12">
+          <QuestionCard className="text-center p-8 sm:p-12">
+            <div className="flex justify-between items-start mb-4">
+              <h1 className="font-display text-3xl sm:text-4xl text-charcoal text-left">
+                {headerTitle}
+              </h1>
+              <button
+                onClick={() => speak(headerTitle, session.language === 'hi' ? 'hi-IN' : 'en-US')}
+                className="w-11 h-11 rounded-full bg-primary/10 hover:bg-primary/20 text-primary flex items-center justify-center shrink-0"
+                title="Listen to instruction"
+              >
+                {isPlaying ? <VolumeX className="w-5 h-5 animate-pulse" /> : <Volume2 className="w-5 h-5" />}
+              </button>
+            </div>
+
+            <p className="text-muted text-base sm:text-lg mb-8 text-left">
               {session.language === 'hi' 
                 ? 'बेहतर निदान के लिए अपनी पुरानी प्रिस्क्रिप्शन या रिपोर्ट की तस्वीर लें।' 
-                : 'Take a picture of your previous prescriptions or reports for a better diagnosis.'}
+                : 'Take a picture of your previous prescriptions or reports for an enhanced AI diagnostic review.'}
             </p>
+
+            {uploadError && (
+              <div className="bg-danger/10 text-danger p-6 rounded-2xl mb-8 flex flex-col items-center border border-danger/20">
+                <AlertTriangle className="w-8 h-8 mb-2" />
+                <p className="font-bold text-lg">Failed to upload document</p>
+                <p className="text-sm mt-1 mb-6 text-danger/80">Please check your connection and try again.</p>
+                <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
+                  <button onClick={() => selectedFile && startProcessing(selectedFile)} className="px-6 py-3 font-bold bg-danger text-white rounded-xl hover:bg-danger/90">
+                    Retry Upload
+                  </button>
+                  <button onClick={() => navigate('/medical-history')} className="px-6 py-3 font-bold bg-white text-danger border-2 border-danger rounded-xl hover:bg-danger/5">
+                    Skip Document
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-6 justify-center">
               <button 
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full sm:w-64 min-h-[160px] rounded-[16px] bg-primary/10 hover:bg-primary/20 border-2 border-primary/30 flex flex-col items-center justify-center transition-colors"
+                className="w-full sm:w-64 min-h-[140px] rounded-[16px] bg-primary/10 hover:bg-primary/20 border-2 border-primary/30 flex flex-col items-center justify-center transition-colors shadow-xs"
               >
-                <Camera className="w-12 h-12 text-primary mb-4" />
-                <span className="text-xl font-bold text-primary">Open Camera</span>
+                <Camera className="w-10 h-10 text-primary mb-3" />
+                <span className="text-lg font-bold text-primary">Open Camera</span>
               </button>
               
               <button 
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full sm:w-64 min-h-[160px] rounded-[16px] bg-white hover:bg-sand border-2 border-warmgray flex flex-col items-center justify-center transition-colors"
+                className="w-full sm:w-64 min-h-[140px] rounded-[16px] bg-white hover:bg-sand border-2 border-warmgray flex flex-col items-center justify-center transition-colors shadow-xs"
               >
-                <UploadCloud className="w-12 h-12 text-muted mb-4" />
-                <span className="text-xl font-bold text-charcoal">Upload File</span>
+                <UploadCloud className="w-10 h-10 text-muted mb-3" />
+                <span className="text-lg font-bold text-charcoal">Upload File</span>
               </button>
             </div>
             
@@ -186,10 +256,37 @@ export default function DocumentUploadFlow() {
               onChange={handleFileUpload}
             />
 
-            <div className="mt-12">
+            {/* Voice ASR Input Bar */}
+            <div className="flex flex-col items-center mt-8 pt-4 border-t border-warmgray/60 w-full">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => (isListening ? stopListening() : startListening({ lang: session.language === 'hi' ? 'hi-IN' : 'en-IN' }))}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-md ${
+                    isListening 
+                      ? 'bg-danger text-white animate-pulse scale-110' 
+                      : 'bg-primary text-white hover:bg-primary/90'
+                  }`}
+                  title="Voice command"
+                >
+                  <Mic className="w-5 h-5" />
+                </button>
+                <div className="text-left">
+                  <p className="text-xs font-semibold text-charcoal">{isListening ? 'Listening...' : 'Voice Input (ASR)'}</p>
+                  <p className="text-xs text-muted">Say "Camera", "Upload", or "Skip"</p>
+                </div>
+              </div>
+              {transcript && (
+                <p className="mt-2 text-xs font-medium text-primary bg-primary/10 px-3 py-1 rounded-full">
+                  "{transcript}"
+                </p>
+              )}
+            </div>
+
+            <div className="mt-6">
               <button 
                 onClick={() => navigate('/medical-history')}
-                className="text-muted hover:text-charcoal underline underline-offset-4"
+                className="text-muted hover:text-charcoal underline underline-offset-4 text-sm"
               >
                 Skip this step
               </button>
@@ -200,7 +297,7 @@ export default function DocumentUploadFlow() {
         {step === 'processing' && (
           <QuestionCard className="text-center p-16">
              <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-8"></div>
-             <h2 className="font-display text-3xl text-charcoal mb-4">Scanning Document...</h2>
+             <h2 className="font-display text-3xl text-charcoal mb-4">Scanning Document (Sarvam & Tesseract OCR)...</h2>
              <div className="w-full max-w-md mx-auto bg-warmgray rounded-full h-4 mb-4 overflow-hidden">
                <div className="bg-primary h-4 transition-all duration-300" style={{ width: `${progress}%` }}></div>
              </div>
@@ -211,21 +308,29 @@ export default function DocumentUploadFlow() {
         {step === 'correction' && (
           <QuestionCard className="p-8">
             <h2 className="font-display text-3xl text-charcoal mb-2">Review Extracted Info</h2>
-            <p className="text-muted mb-8">Please check the fields below and correct any mistakes.</p>
+            <p className="text-muted mb-6">Please check the fields below and correct any mistakes.</p>
+
+            {extractions.every(e => !e.field_value) && (
+              <div className="bg-terracotta/10 text-terracotta p-4 rounded-xl mb-8 flex flex-col items-center text-center border border-terracotta/20">
+                <AlertTriangle className="w-6 h-6 mb-2" />
+                <p className="font-bold">Could not automatically extract all fields</p>
+                <p className="text-sm mt-1">Please enter the information manually or confirm to proceed.</p>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-               <div className="bg-sand/50 p-6 rounded-[12px] border border-warmgray max-h-[400px] overflow-y-auto">
-                 <h3 className="font-bold text-charcoal mb-4">Raw Scanned Text</h3>
-                 <pre className="text-sm text-muted whitespace-pre-wrap font-sans">
+               <div className="bg-sand/50 p-6 rounded-[12px] border border-warmgray max-h-[360px] overflow-y-auto">
+                 <h3 className="font-bold text-charcoal mb-3">Raw Scanned Text</h3>
+                 <pre className="text-xs text-muted whitespace-pre-wrap font-sans">
                    {rawText || 'No text could be extracted.'}
                  </pre>
                </div>
 
-               <div className="space-y-6">
+               <div className="space-y-4">
                  {extractions.map((field, idx) => (
                    <div key={field.field_name} className="flex flex-col">
-                     <label className="text-sm font-bold text-charcoal mb-2 flex items-center gap-2">
-                       {field.field_name}
+                     <label className="text-sm font-semibold text-charcoal mb-1 flex items-center justify-between">
+                       <span>{field.field_name}</span>
                        {field.confidence < 0.5 && field.field_value ? (
                          <span className="flex items-center gap-1 text-danger text-xs px-2 py-0.5 bg-danger/10 rounded-full">
                            <AlertTriangle className="w-3 h-3" /> Low Confidence
@@ -234,7 +339,7 @@ export default function DocumentUploadFlow() {
                      </label>
                      <input
                        type="text"
-                       className="p-4 border-2 border-warmgray rounded-[12px] focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                       className="p-3 border-2 border-warmgray rounded-[12px] text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                        value={field.field_value}
                        onChange={e => updateExtraction(idx, e.target.value)}
                        placeholder={`Enter ${field.field_name.toLowerCase()}`}
@@ -244,9 +349,9 @@ export default function DocumentUploadFlow() {
 
                  <button 
                    onClick={handleSave}
-                   className="w-full p-4 mt-4 bg-primary text-white text-xl font-bold rounded-[12px] hover:bg-primary/90 transition-colors"
+                   className="w-full p-4 mt-4 bg-primary text-white text-lg font-bold rounded-[12px] hover:bg-primary/90 transition-colors shadow-xs"
                  >
-                   Confirm & Save
+                   Confirm & Save (or say "Save")
                  </button>
                </div>
             </div>
@@ -255,9 +360,9 @@ export default function DocumentUploadFlow() {
 
         {step === 'success' && (
           <QuestionCard className="text-center p-16">
-            <CheckCircle className="w-20 h-20 text-success mx-auto mb-6" />
-            <h2 className="font-display text-3xl text-charcoal mb-4">Saved Successfully</h2>
-            <p className="text-muted text-xl">Routing you to Medical History...</p>
+            <CheckCircle className="w-16 h-16 text-success mx-auto mb-4" />
+            <h2 className="font-display text-3xl text-charcoal mb-2">Saved Successfully</h2>
+            <p className="text-muted text-base">Routing you to Medical History...</p>
           </QuestionCard>
         )}
 

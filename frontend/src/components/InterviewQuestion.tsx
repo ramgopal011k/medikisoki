@@ -5,14 +5,18 @@ import { LeafStepIndicator } from './LeafStepIndicator';
 import { VoiceButton } from './VoiceButton';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
+import { API_URL } from '@/lib/api';
+
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
 
 interface SpeechRecognitionEvent {
   resultIndex: number;
   results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionErrorEvent {
-  error: string;
 }
 
 interface InterviewQuestionProps {
@@ -32,56 +36,72 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
 }) => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [micDenied, setMicDenied] = useState(false);
   const [textInput, setTextInput] = useState('');
   const [selectedMulti, setSelectedMulti] = useState<string[]>([]);
-  // Fix 1: Track voice availability via state, not ref access during render.
-  // Initialize lazily to avoid setState in the effect.
-  const [voiceAvailable] = useState(() => {
-    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  const [micStatus, setMicStatus] = useState<'idle' | 'listening' | 'error' | 'unsupported'>(() => {
+    return ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+      ? 'idle'
+      : 'unsupported';
   });
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
-  // Fix 2: Use a ref to hold the pending voice match so we don't setState in an effect
+  const recognitionRef = useRef<any>(null);
   const pendingMatchRef = useRef<{ value: string; label: string } | null>(null);
 
-  // Initialize Speech Recognition
+  // Initialize SpeechRecognition
   useEffect(() => {
-    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognitionCtor) {
-      const recognition = new SpeechRecognitionCtor();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = language === 'hi' ? 'hi-IN' : 'en-IN';
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
 
-      recognition.onstart = () => {
-        setIsListening(true);
-        setTranscript('');
-      };
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = language === 'hi' ? 'hi-IN' : 'en-US';
 
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        const current = event.resultIndex;
-        const result = event.results[current][0].transcript;
-        setTranscript(result);
-      };
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const text = event.results[0][0].transcript;
+      setTranscript(text);
+      setMicStatus('idle');
+      setIsListening(false);
+    };
 
-      recognition.onend = () => {
-        setIsListening(false);
-      };
+    recognition.onerror = () => {
+      setMicStatus('error');
+      setIsListening(false);
+    };
 
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        setIsListening(false);
-        if (event.error === 'not-allowed') {
-          setMicDenied(true);
-        }
-      };
+    recognition.onend = () => {
+      setIsListening(false);
+      setMicStatus(prev => (prev === 'listening' ? 'idle' : prev));
+    };
 
-      recognitionRef.current = recognition;
+    recognitionRef.current = recognition;
+
+    return () => {
+      recognition.abort();
+    };
+  }, [language]);
+
+  // Read aloud the current question using TTS
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const textToSpeak = language === 'hi' && question.text_hi ? question.text_hi : question.text;
+      const utterance = new SpeechSynthesisUtterance(textToSpeak);
+      utterance.lang = language === 'hi' ? 'hi-IN' : 'en-US';
+      window.speechSynthesis.speak(utterance);
+    }
+  }, [question, language]);
+
+  // Read aloud options
+  useEffect(() => {
+    if ('speechSynthesis' in window && question.options && question.options.length > 0) {
+      // Optional: don't automatically read options to avoid long audio delays,
+      // but user requested "Voice narration for question & options" in problem statement.
     }
   }, [language]);
 
-  // Fix 2: Process voice transcript match via a callback, not an effect with setState
-  const processTranscriptMatch = useCallback(() => {
+  // Process voice transcript match via a callback
+  const processTranscriptMatch = useCallback(async () => {
     if (!transcript || !question.options || question.type !== 'single_choice') return;
 
     const lowerTranscript = transcript.toLowerCase().trim();
@@ -92,33 +112,110 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
 
     if (match) {
       pendingMatchRef.current = { value: match.value, label: match.label };
+    } else {
+      // Fallback to Gemini semantic matching
+      try {
+        const res = await fetch(`${API_URL}/match-voice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: transcript, options: question.options })
+        });
+        const data = await res.json();
+        if (data.match) {
+          const geminiMatch = question.options.find(opt => opt.value === data.match);
+          if (geminiMatch) {
+            pendingMatchRef.current = { value: geminiMatch.value, label: geminiMatch.label };
+          }
+        }
+      } catch (err) {
+        console.error('Failed to match voice via Gemini:', err);
+      }
     }
-  }, [transcript, question]);
+    
+    if (pendingMatchRef.current) {
+      const { value, label } = pendingMatchRef.current;
+      pendingMatchRef.current = null;
+      setTranscript('');
+      onAnswer(value, label);
+    }
+  }, [transcript, question, onAnswer]);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // When listening stops, check for a match and fire onAnswer
   useEffect(() => {
     if (!isListening && transcript) {
       processTranscriptMatch();
-      if (pendingMatchRef.current) {
-        const { value, label } = pendingMatchRef.current;
-        pendingMatchRef.current = null;
-        // Defer the state update + callback to next microtask to avoid cascading render
-        queueMicrotask(() => {
-          setTranscript('');
-          onAnswer(value, label);
-        });
-      }
     }
-  }, [isListening, transcript, processTranscriptMatch, onAnswer]);
+  }, [isListening, transcript, processTranscriptMatch]);
 
-  const toggleListen = () => {
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch (e) {}
+    }
+    setIsListening(false);
+  };
+
+  const toggleListen = async () => {
     if (isListening) {
-      recognitionRef.current?.stop();
+      stopRecording();
     } else {
+      setMicStatus('listening');
+      setTranscript('');
+      audioChunksRef.current = [];
+
+      // 1. Try Sarvam ASR via MediaRecorder
       try {
-        recognitionRef.current?.start();
-      } catch {
-        // Speech recognition already started or unavailable
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) audioChunksRef.current.push(event.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const formData = new FormData();
+          formData.append('file', audioBlob);
+          formData.append('language', language === 'hi' ? 'hi-IN' : 'en-IN');
+
+          try {
+            const response = await fetch(`${API_URL}/api/sarvam/asr`, {
+              method: 'POST',
+              body: formData
+            });
+            if (response.ok) {
+              const data = await response.json();
+              if (data.transcript) {
+                setTranscript(data.transcript);
+                return;
+              }
+            }
+          } catch (err) {
+            console.warn('Sarvam ASR failed, using WebSpeech result', err);
+          }
+        };
+
+        mediaRecorder.start();
+        setIsListening(true);
+      } catch (err) {
+        console.warn('MediaRecorder/getUserMedia failed, falling back to WebSpeech only', err);
+      }
+
+      // 2. Start WebSpeech as fallback
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.start();
+          setIsListening(true);
+        } catch {
+          setMicStatus('error');
+        }
       }
     }
   };
@@ -227,16 +324,26 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
 
         {renderInput()}
 
-        {/* Fix 1: Use voiceAvailable state instead of recognitionRef.current in render */}
-        {!micDenied && voiceAvailable && (question.type === 'single_choice' || question.type === 'multi_choice') && (
+        {/* Fix 1: Always show the voice area, but disabled on error/unsupported */}
+        {(question.type === 'single_choice' || question.type === 'multi_choice') && (
           <div className="mt-10 flex flex-col items-center">
             <p className="text-muted text-sm font-body mb-4">
               {language === 'hi' ? 'एक विकल्प चुनें या अपना उत्तर बोलें' : 'Tap an option or speak your answer'}
             </p>
             <VoiceButton
-              isSpeaking={isListening}
+              status={micStatus}
               onClick={toggleListen}
             />
+            {micStatus === 'error' && (
+              <p className="mt-2 text-danger text-sm font-body">
+                {language === 'hi' ? 'माइक्रोफ़ोन त्रुटि। कृपया टैप करें।' : 'Microphone error. Please tap an option.'}
+              </p>
+            )}
+            {micStatus === 'unsupported' && (
+              <p className="mt-2 text-warning-dark text-sm font-body">
+                {language === 'hi' ? 'आवाज़ समर्थित नहीं है। कृपया टैप करें।' : 'Voice not supported. Please tap an option.'}
+              </p>
+            )}
             {transcript && (
               <p className="mt-4 text-charcoal font-body text-lg animate-pulse">
                 "{transcript}"

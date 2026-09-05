@@ -7,6 +7,8 @@ import { InterviewQuestion } from '../components/InterviewQuestion';
 import { MandalaBackground } from '../components/MandalaBackground';
 import { QuestionCard } from '../components/QuestionCard';
 import { get, set } from 'idb-keyval';
+import { supabase } from '@/lib/supabase';
+import { API_URL } from '@/lib/api';
 
 interface SessionState {
   id: string;
@@ -38,24 +40,24 @@ export default function InterviewFlow() {
     return { id: sessionId, complaint, language: lang };
   });
 
-  const [tree] = useState<InterviewTree | null>(() => {
-    const complaint = localStorage.getItem('patient_complaint') || 'Chest pain';
-    return getInterviewTree(complaint);
-  });
-
-  const [currentQId, setCurrentQId] = useState<string | null>(() => {
-    const complaint = localStorage.getItem('patient_complaint') || 'Chest pain';
-    const t = getInterviewTree(complaint);
-    return t ? t.start_question_id : null;
-  });
+  const [tree, setTree] = useState<InterviewTree | null>(null);
+  const [currentQId, setCurrentQId] = useState<string | null>(null);
   const [stepCount, setStepCount] = useState(0);
-  const [isFinished, setIsFinished] = useState(() => {
-    // If there's no tree for this complaint, mark as finished immediately
-    const complaint = localStorage.getItem('patient_complaint') || 'Chest pain';
-    return !getInterviewTree(complaint);
-  });
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isFinished, setIsFinished] = useState(false);
   const [redFlagTriggered, setRedFlagTriggered] = useState<RedFlagResult | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Load tree logic
+  useEffect(() => {
+    if (!session) return;
+    const loadedTree = getInterviewTree(session.complaint);
+    if (loadedTree) {
+      setTree(loadedTree);
+      setCurrentQId(loadedTree.start_question_id);
+    } else {
+      setIsFinished(true);
+    }
+  }, [session]);
 
   // Improvement 2: IndexedDB-based offline queue flush
   const flushOfflineQueue = useCallback(async () => {
@@ -67,7 +69,7 @@ export default function InterviewFlow() {
 
     for (const fact of queue) {
       try {
-        const res = await fetch('http://localhost:3001/history-facts', {
+        const res = await fetch(`${API_URL}/history-facts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(fact)
@@ -94,10 +96,31 @@ export default function InterviewFlow() {
     };
     init();
 
-    const handleOnline = () => { flushOfflineQueue(); };
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
+    window.addEventListener('online', flushOfflineQueue);
+    return () => window.removeEventListener('online', flushOfflineQueue);
   }, [session, navigate, flushOfflineQueue]);
+
+  // Subscribe to realtime red flags
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
+      .channel('red-flags-channel')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'red_flags',
+        filter: `session_id=eq.${session.id}`
+      }, (payload) => {
+        setRedFlagTriggered({ 
+          flag_id: payload.new.rule_id, 
+        } as RedFlagResult);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
 
   const handleAnswer = async (value: string | string[], answerText: string) => {
     if (!currentQId || !tree || !session) return;
@@ -122,7 +145,7 @@ export default function InterviewFlow() {
     // Save fact (try online, fallback to IndexedDB queue)
     try {
       if (!navigator.onLine) throw new Error('Offline');
-      const res = await fetch('http://localhost:3001/history-facts', {
+      const res = await fetch(`${API_URL}/history-facts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -143,7 +166,7 @@ export default function InterviewFlow() {
         setRedFlagTriggered(redFlag);
         // Persist red flag to dedicated table (fire and forget)
         if (navigator.onLine) {
-          fetch('http://localhost:3001/red-flags', {
+          fetch(`${API_URL}/red-flags`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
