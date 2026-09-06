@@ -1,3 +1,11 @@
 {
-  "build": { "builder": "NIXPACKS" }
+  "build": { 
+    "builder": "NIXPACKS" 
+  },
+  "deploy": {
+    "healthcheckTimeout": 300
+  },
+  "env": {
+    "NIXPACKS_NODE_VERSION": "22"
+  }
 }
