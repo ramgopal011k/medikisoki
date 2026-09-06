@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { useEffect, useState } from 'react';
 import ConsentFlow from './pages/Kiosk/ConsentFlow';
 import ChiefComplaint from './pages/Kiosk/ChiefComplaint';
-import FollowUp from './pages/Kiosk/FollowUp';
 import DoctorLogin from './pages/DoctorLogin';
 import DoctorDashboard from './pages/Doctor/DoctorDashboard';
 import InterviewFlow from './pages/InterviewFlow';
@@ -75,7 +74,6 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to="/consent" replace />} />
         <Route path="/consent" element={<ConsentFlow />} />
         <Route path="/chief-complaint" element={<ChiefComplaint />} />
-        <Route path="/follow-up" element={<FollowUp />} />
         <Route path="/interview" element={<InterviewFlow />} />
         <Route path="/ayush-assessment" element={<AyushFlow />} />
         <Route path="/ayush" element={<AyushFlow />} />

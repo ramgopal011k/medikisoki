@@ -250,7 +250,7 @@ export default function InterviewFlow() {
       <div className="z-10 w-full">
          <InterviewQuestion
            question={currentQ}
-           totalSteps={8}
+           totalSteps={Object.keys(tree.questions).length}
            currentStep={stepCount}
            onAnswer={handleAnswer}
            language={session?.language}

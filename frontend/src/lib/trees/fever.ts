@@ -88,6 +88,34 @@ export const feverTree: InterviewTree = {
         { value: 'no', label: 'No', label_hi: 'नहीं' }
       ],
       next: (_answer) => {
+        return 'fever_contacts';
+      }
+    },
+    fever_contacts: {
+      id: 'fever_contacts',
+      text: 'Have you been in close contact with anyone who has been sick recently?',
+      text_hi: 'क्या आप हाल ही में किसी बीमार व्यक्ति के संपर्क में आए हैं?',
+      type: 'single_choice',
+      options: [
+        { value: 'yes', label: 'Yes', label_hi: 'हाँ' },
+        { value: 'no', label: 'No', label_hi: 'नहीं' }
+      ],
+      next: (_answer) => {
+        return 'fever_joint_pain';
+      }
+    },
+    fever_joint_pain: {
+      id: 'fever_joint_pain',
+      text: 'Are you experiencing severe joint or muscle pain?',
+      text_hi: 'क्या आपको जोड़ों या मांसपेशियों में गंभीर दर्द हो रहा है?',
+      type: 'single_choice',
+      options: [
+        { value: 'yes_severe', label: 'Yes, very severe (bone-breaking pain)', label_hi: 'हाँ, बहुत तेज (हड्डी टूटने जैसा दर्द)' },
+        { value: 'mild', label: 'Mild body ache', label_hi: 'हल्का बदन दर्द' },
+        { value: 'no', label: 'No', label_hi: 'नहीं' }
+      ],
+      next: (answer) => {
+        if (answer === 'yes_severe') return { type: 'red_flag', flag_id: 'fever_suspected_dengue' };
         return 'fever_associated';
       }
     },

@@ -60,6 +60,32 @@ export const coughTree: InterviewTree = {
         { value: 'constant', label: 'Constant throughout the entire day', label_hi: 'पूरे दिन लगातार' }
       ],
       next: (_answer) => {
+        return 'cough_exposure';
+      }
+    },
+    cough_exposure: {
+      id: 'cough_exposure',
+      text: 'Have you recently been exposed to a lot of dust, smoke, or known allergens?',
+      text_hi: 'क्या आप हाल ही में बहुत अधिक धूल, धुएं या किसी एलर्जी के संपर्क में आए हैं?',
+      type: 'single_choice',
+      options: [
+        { value: 'yes', label: 'Yes', label_hi: 'हाँ' },
+        { value: 'no', label: 'No', label_hi: 'नहीं' }
+      ],
+      next: (_answer) => {
+        return 'cough_voice';
+      }
+    },
+    cough_voice: {
+      id: 'cough_voice',
+      text: 'Have you noticed any hoarseness or changes in your voice?',
+      text_hi: 'क्या आपने अपनी आवाज़ में भारीपन या कोई बदलाव महसूस किया है?',
+      type: 'single_choice',
+      options: [
+        { value: 'yes', label: 'Yes', label_hi: 'हाँ' },
+        { value: 'no', label: 'No', label_hi: 'नहीं' }
+      ],
+      next: (_answer) => {
         return 'cough_associated';
       }
     },

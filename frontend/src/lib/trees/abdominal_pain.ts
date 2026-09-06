@@ -93,6 +93,32 @@ export const abdominalPainTree: InterviewTree = {
       ],
       next: (answer) => {
         if (answer === 'blood') return { type: 'red_flag', flag_id: 'abdominal_blood_in_stool' };
+        return 'abd_jaundice';
+      }
+    },
+    abd_jaundice: {
+      id: 'abd_jaundice',
+      text: 'Have you noticed any yellowish discoloration of your eyes or skin?',
+      text_hi: 'क्या आपने अपनी आँखों या त्वचा में पीलापन देखा है (पीलिया)?',
+      type: 'single_choice',
+      options: [
+        { value: 'yes', label: 'Yes', label_hi: 'हाँ' },
+        { value: 'no', label: 'No', label_hi: 'नहीं' }
+      ],
+      next: (_answer) => {
+        return 'abd_urinary';
+      }
+    },
+    abd_urinary: {
+      id: 'abd_urinary',
+      text: 'Are you experiencing any pain or burning sensation when you urinate?',
+      text_hi: 'क्या आपको पेशाब करते समय कोई दर्द या जलन महसूस होती है?',
+      type: 'single_choice',
+      options: [
+        { value: 'yes', label: 'Yes', label_hi: 'हाँ' },
+        { value: 'no', label: 'No', label_hi: 'नहीं' }
+      ],
+      next: (_answer) => {
         return 'abd_vomiting';
       }
     },

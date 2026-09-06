@@ -81,6 +81,20 @@ export const chestPainTree: InterviewTree = {
         return 'cp_severity';
       }
     },
+    cp_severity: {
+      id: 'cp_severity',
+      text: 'How severe is the chest pain?',
+      text_hi: 'छाती में दर्द कितना तेज है?',
+      type: 'single_choice',
+      options: [
+        { value: 'mild', label: 'Mild (Noticeable but manageable)', label_hi: 'हल्का (महसूस होता है पर काम कर सकते हैं)' },
+        { value: 'moderate', label: 'Moderate (Affects daily activities)', label_hi: 'मध्यम (रोजमर्रा के कामों में दिक्कत)' },
+        { value: 'severe', label: 'Severe (Unbearable or worst ever)', label_hi: 'गंभीर (असहनीय या अब तक का सबसे तेज दर्द)' }
+      ],
+      next: (_answer) => {
+        return 'cp_dizziness';
+      }
+    },
     cp_associated_cardiac: {
       id: 'cp_associated_cardiac',
       text: 'Are you experiencing any of these other symptoms?',
@@ -112,26 +126,17 @@ export const chestPainTree: InterviewTree = {
         return 'cp_onset';
       }
     },
-    cp_severity: {
-      id: 'cp_severity',
-      text: 'On a scale of 1 to 10, how bad is the pain?',
-      text_hi: '1 से 10 के पैमाने पर, दर्द कितना बुरा है?',
-      type: 'number',
-      next: (_answer) => {
-        return 'cp_history';
-      }
-    },
-    cp_history: {
-      id: 'cp_history',
-      text: 'Do you have any past history of heart disease, stent, hypertension, or diabetes?',
-      text_hi: 'क्या आपको पहले दिल की बीमारी, स्टेंट, हाई ब्लड प्रेशर या शुगर की समस्या रही है?',
+    cp_dizziness: {
+      id: 'cp_dizziness',
+      text: 'Are you feeling lightheaded, dizzy, or like you might faint?',
+      text_hi: 'क्या आपको चक्कर आ रहे हैं या बेहोशी जैसा महसूस हो रहा है?',
       type: 'single_choice',
       options: [
-        { value: 'yes_cardiac', label: 'Yes, known heart disease / stent / bypass', label_hi: 'हाँ, दिल की बीमारी / स्टेंट / बाईपास' },
-        { value: 'yes_htn_dm', label: 'High BP or Diabetes only', label_hi: 'सिर्फ बीपी या शुगर' },
-        { value: 'no_history', label: 'No prior medical history', label_hi: 'कोई पुरानी बीमारी नहीं' }
+        { value: 'yes', label: 'Yes', label_hi: 'हाँ' },
+        { value: 'no', label: 'No', label_hi: 'नहीं' }
       ],
-      next: (_answer) => {
+      next: (answer) => {
+        if (answer === 'yes') return { type: 'red_flag', flag_id: 'chest_pain_dizziness' };
         return null; // End of interview
       }
     }

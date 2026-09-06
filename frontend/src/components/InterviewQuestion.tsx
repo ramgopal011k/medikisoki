@@ -81,28 +81,18 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
     };
   }, [language]);
 
-  // Read aloud the current question using TTS
-  useEffect(() => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const textToSpeak = language === 'hi' && question.text_hi ? question.text_hi : question.text;
-      const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      utterance.lang = language === 'hi' ? 'hi-IN' : 'en-US';
-      window.speechSynthesis.speak(utterance);
-    }
-  }, [question, language]);
-
-  // Read aloud options
-  useEffect(() => {
-    if ('speechSynthesis' in window && question.options && question.options.length > 0) {
-      // Optional: don't automatically read options to avoid long audio delays,
-      // but user requested "Voice narration for question & options" in problem statement.
-    }
-  }, [language]);
 
   // Process voice transcript match via a callback
   const processTranscriptMatch = useCallback(async () => {
-    if (!transcript || !question.options || question.type !== 'single_choice') return;
+    if (!transcript) return;
+
+    if (question.type === 'text' || question.type === 'number') {
+      setTextInput(transcript);
+      setTranscript('');
+      return;
+    }
+
+    if (!question.options || question.type !== 'single_choice') return;
 
     const lowerTranscript = transcript.toLowerCase().trim();
     const match = question.options.find(opt =>
@@ -324,12 +314,13 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
 
         {renderInput()}
 
-        {/* Fix 1: Always show the voice area, but disabled on error/unsupported */}
-        {(question.type === 'single_choice' || question.type === 'multi_choice') && (
-          <div className="mt-10 flex flex-col items-center">
-            <p className="text-muted text-sm font-body mb-4">
-              {language === 'hi' ? 'एक विकल्प चुनें या अपना उत्तर बोलें' : 'Tap an option or speak your answer'}
-            </p>
+        {/* Voice ASR for all question types */}
+        <div className="mt-10 flex flex-col items-center">
+          <p className="text-muted text-sm font-body mb-4">
+            {language === 'hi' 
+              ? (question.type === 'text' || question.type === 'number' ? 'अपना उत्तर बोलने के लिए टैप करें' : 'एक विकल्प चुनें या अपना उत्तर बोलें') 
+              : (question.type === 'text' || question.type === 'number' ? 'Tap to speak your answer' : 'Tap an option or speak your answer')}
+          </p>
             <VoiceButton
               status={micStatus}
               onClick={toggleListen}
@@ -355,7 +346,6 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
               </p>
             )}
           </div>
-        )}
       </QuestionCard>
     </div>
   );

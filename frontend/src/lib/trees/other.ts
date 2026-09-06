@@ -26,9 +26,14 @@ export const otherTree: InterviewTree = {
     },
     q3_severity: {
       id: 'q3_severity',
-      text: 'On a scale of 1 to 10, how severe is your discomfort?',
-      text_hi: '1 से 10 के पैमाने पर आपकी तकलीफ की तीव्रता कितनी है?',
-      type: 'number',
+      text: 'How severe is your discomfort?',
+      text_hi: 'आपकी तकलीफ कितनी तेज है?',
+      type: 'single_choice',
+      options: [
+        { value: 'mild', label: 'Mild (Noticeable but manageable)', label_hi: 'हल्का (महसूस होता है पर काम कर सकते हैं)' },
+        { value: 'moderate', label: 'Moderate (Affects daily activities)', label_hi: 'मध्यम (रोजमर्रा के कामों में दिक्कत)' },
+        { value: 'severe', label: 'Severe (Unbearable)', label_hi: 'गंभीर (असहनीय)' }
+      ],
       next: () => 'q4_systemic'
     },
     q4_systemic: {

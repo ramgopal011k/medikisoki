@@ -150,7 +150,7 @@ export default function ConsentFlow() {
         if (ayushMode) {
           navigate('/ayush-assessment');
         } else {
-          navigate('/follow-up');
+          navigate('/interview');
         }
       }, 400);
     } catch (err) {
@@ -168,7 +168,7 @@ export default function ConsentFlow() {
         if (ayushMode) {
           navigate('/ayush-assessment');
         } else {
-          navigate('/follow-up');
+          navigate('/interview');
         }
       }, 400);
     } finally {

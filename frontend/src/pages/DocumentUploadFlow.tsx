@@ -126,16 +126,44 @@ export default function DocumentUploadFlow() {
       let diagVal = '';
       let medsVal = '';
 
-      lines.forEach(line => {
-        const l = line.toLowerCase();
-        if (l.includes('name:') || l.includes('patient:')) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const lowerLine = line.toLowerCase().trim();
+        
+        // Patient Name Parsing
+        if (lowerLine.includes('patient:') || lowerLine.includes('name:')) {
           nameVal = line.split(/[:]/)[1]?.trim() || line;
-        } else if (l.includes('diagnosis:') || l.includes('dx:')) {
-          diagVal = line.split(/[:]/)[1]?.trim() || line;
-        } else if (l.includes('rx:') || l.includes('tab') || l.includes('cap') || l.includes('mg')) {
-          medsVal += (medsVal ? ', ' : '') + line.trim();
+        } else if (lowerLine === 'patient' || lowerLine === 'name') {
+          if (i + 1 < lines.length) {
+            // Remove common artifacts like 'DATE' that appear on the same line in OCR
+            nameVal = lines[i + 1].replace(/DATE/ig, '').trim();
+          }
         }
-      });
+
+        // Diagnosis Parsing
+        if (lowerLine.includes('diagnosis:') || lowerLine.includes('dx:')) {
+          diagVal = line.split(/[:]/)[1]?.trim() || line;
+        } else if (lowerLine === 'diagnosis' || lowerLine === 'dx') {
+          if (i + 1 < lines.length) {
+            diagVal = lines[i + 1].trim();
+          }
+        }
+
+        // Medications Parsing
+        if (
+          lowerLine.includes('rx:') || 
+          lowerLine.includes('tab') || 
+          lowerLine.includes('cap') || 
+          lowerLine.includes('mg') || 
+          lowerLine.includes('ml') || 
+          lowerLine.includes('syrup')
+        ) {
+          // Ignore table headers
+          if (!lowerLine.includes('drug dosage') && !lowerLine.includes('medications')) {
+            medsVal += (medsVal ? ', ' : '') + line.trim();
+          }
+        }
+      }
 
       setExtractions([
         { field_name: 'Patient Name', field_value: nameVal || '', raw_text: text, confidence: nameVal ? 0.8 : 0 },

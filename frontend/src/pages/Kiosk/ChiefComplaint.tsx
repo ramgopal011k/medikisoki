@@ -114,10 +114,10 @@ export default function ChiefComplaint() {
         return;
       }
 
-      navigate('/follow-up');
+      navigate('/interview');
     } catch (err) {
       console.error(err);
-      navigate('/follow-up');
+      navigate('/interview');
     } finally {
       setLoading(false);
     }

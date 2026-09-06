@@ -46,14 +46,45 @@ export const headacheTree: InterviewTree = {
         { value: 'sharp_piercing', label: 'Sharp, piercing or electric shock-like', label_hi: 'तेज चुभने वाला या बिजली के झटके जैसा' }
       ],
       next: (_answer) => {
+        return 'ha_triggers';
+      }
+    },
+    ha_triggers: {
+      id: 'ha_triggers',
+      text: 'Is the headache worsened by bright lights or loud noises?',
+      text_hi: 'क्या तेज रोशनी या शोर से आपका सिरदर्द बढ़ जाता है?',
+      type: 'single_choice',
+      options: [
+        { value: 'yes', label: 'Yes', label_hi: 'हाँ' },
+        { value: 'no', label: 'No', label_hi: 'नहीं' }
+      ],
+      next: (_answer) => {
+        return 'ha_aura';
+      }
+    },
+    ha_aura: {
+      id: 'ha_aura',
+      text: 'Did you experience any visual changes (like flashing lights or blind spots) before the headache started?',
+      text_hi: 'क्या सिरदर्द शुरू होने से पहले आपको चमकती रोशनी या धुंधलापन महसूस हुआ था?',
+      type: 'single_choice',
+      options: [
+        { value: 'yes', label: 'Yes', label_hi: 'हाँ' },
+        { value: 'no', label: 'No', label_hi: 'नहीं' }
+      ],
+      next: (_answer) => {
         return 'ha_severity';
       }
     },
     ha_severity: {
       id: 'ha_severity',
-      text: 'On a scale of 1 to 10, how severe is the headache right now?',
-      text_hi: '1 से 10 के पैमाने पर सिरदर्द की तीव्रता कितनी है?',
-      type: 'number',
+      text: 'How severe is the headache?',
+      text_hi: 'सिरदर्द कितना तेज है?',
+      type: 'single_choice',
+      options: [
+        { value: 'mild', label: 'Mild (Noticeable but manageable)', label_hi: 'हल्का (महसूस होता है पर काम कर सकते हैं)' },
+        { value: 'moderate', label: 'Moderate (Affects daily activities)', label_hi: 'मध्यम (रोजमर्रा के कामों में दिक्कत)' },
+        { value: 'severe', label: 'Severe (Unbearable or worst ever)', label_hi: 'गंभीर (असहनीय या अब तक का सबसे तेज दर्द)' }
+      ],
       next: (_answer) => {
         return 'ha_associated';
       }
