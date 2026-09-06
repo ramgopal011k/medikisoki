@@ -1,4 +1,4 @@
-import type { InterviewTree } from '../../../../.agent/types/interview-tree';
+import type { InterviewQuestion as QuestionType, InterviewQuestion } from "@/types/interview-tree";
 import { chestPainTree } from './chest_pain';
 import { feverTree } from './fever';
 import { abdominalPainTree } from './abdominal_pain';
