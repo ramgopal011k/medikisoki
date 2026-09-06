@@ -9,8 +9,36 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3001;
 
-app.use(cors({ origin: '*' }));
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map((url) => url.trim().replace(/\/$/, ''))
+  : ['http://localhost:5173', 'http://localhost:3000'];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (
+        allowedOrigins.includes('*') ||
+        allowedOrigins.includes(origin) ||
+        allowedOrigins.some((ao) => origin.startsWith(ao)) ||
+        origin.endsWith('.vercel.app')
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: '50mb' }));
+
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ status: 'ok', service: 'medikisoki-backend', timestamp: new Date().toISOString() });
+});
+
+app.get('/', (_req: Request, res: Response) => {
+  res.json({ status: 'ok', service: 'medikisoki-backend', timestamp: new Date().toISOString() });
+});
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import multer from 'multer';

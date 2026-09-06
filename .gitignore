@@ -16,3 +16,4 @@ backend/src/**/*.d.ts
 backend/src/**/*.map
 .DS_Store
 Thumbs.db
+.vercel
