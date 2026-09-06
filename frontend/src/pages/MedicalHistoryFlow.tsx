@@ -251,14 +251,6 @@ export default function MedicalHistoryFlow() {
       case 0:
         return (
           <div className="flex flex-col gap-3.5 mt-4">
-            <div className="w-full flex justify-end mb-2">
-               <button 
-                 onClick={() => navigate('/records-upload')}
-                 className="text-primary hover:text-primary/80 font-body text-xs font-semibold underline underline-offset-4"
-               >
-                 {session?.language === 'hi' ? 'पुराने रिकॉर्ड अपलोड करें' : 'Upload Past Records (OCR)'}
-               </button>
-            </div>
             
             <div className="grid grid-cols-2 gap-3">
               {['Penicillin', 'Sulfa drugs', 'Peanuts', 'Dust/Pollen', 'None', 'Other'].map(item => (

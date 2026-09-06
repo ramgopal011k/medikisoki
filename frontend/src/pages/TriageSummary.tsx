@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ProvenanceBadge } from '@/components/ProvenanceBadge';
-import { ArrowLeft, Check, AlertTriangle, ShieldCheck, Edit2, Save, X } from 'lucide-react';
+import { ArrowLeft, Check, AlertTriangle, ShieldCheck, Edit2, Save, X, ChevronDown, ChevronUp, Sparkles, BrainCircuit } from 'lucide-react';
 import { API_URL } from '@/lib/api';
 
 interface Session {
@@ -57,6 +57,53 @@ interface Summary {
   generated_text: string;
 }
 
+interface PastVisit {
+  session_id: string;
+  date: string;
+  status: string;
+  chief_complaint: string;
+  documents: any[];
+  doctor_notes: any;
+}
+
+function CollapsibleSection({ title, children, defaultOpen = false, icon: Icon, badge }: any) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <section className="bg-white rounded-2xl border-2 border-warmgray overflow-hidden shadow-sm">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between p-4 sm:p-6 bg-white hover:bg-sand/30 transition-colors text-left focus:outline-none"
+      >
+        <div className="flex items-center gap-3">
+          {Icon && <Icon className={`w-5 h-5 ${title === 'Red Flags' && badge !== 'None' ? 'text-danger' : 'text-muted'}`} />}
+          <h2 className={`text-lg font-bold uppercase tracking-wider ${title === 'Red Flags' && badge !== 'None' ? 'text-danger' : 'text-muted'}`}>
+            {title}
+          </h2>
+          {badge && (
+            <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${
+              badge === 'No data' || badge === 'None' 
+                ? 'bg-warmgray/50 text-muted' 
+                : title === 'Red Flags' 
+                  ? 'bg-danger/10 text-danger' 
+                  : 'bg-primary/10 text-primary'
+            }`}>
+              {badge}
+            </span>
+          )}
+        </div>
+        <div className="text-muted">
+          {isOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+        </div>
+      </button>
+      {isOpen && (
+        <div className="p-4 sm:p-6 border-t border-warmgray bg-white">
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function TriageSummary() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -69,6 +116,7 @@ export default function TriageSummary() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [extractions, setExtractions] = useState<ExtractedField[]>([]);
   const [summaries, setSummaries] = useState<Summary[]>([]);
+  const [pastVisits, setPastVisits] = useState<PastVisit[]>([]);
   const [clinicalAlerts, setClinicalAlerts] = useState<any>(null);
   
   const [isLoading, setIsLoading] = useState(true);
@@ -112,6 +160,16 @@ export default function TriageSummary() {
             setClinicalAlerts(analysisData);
           } catch (e) {
             console.error('Failed to analyze records', e);
+          }
+          
+          try {
+            const historyRes = await fetch(`${API_URL}/sessions/${sessionId}/history`);
+            const historyData = await historyRes.json();
+            if (!ignore && historyData.data) {
+              setPastVisits(historyData.data);
+            }
+          } catch (e) {
+            console.error('Failed to load past visits', e);
           }
         }
       } catch (err) {
@@ -167,13 +225,17 @@ export default function TriageSummary() {
     if (!sessionId) return;
     setIsSavingNotes(true);
     try {
-      await fetch(`${API_URL}/api/summary/verify`, {
+      const doctorInfo = JSON.parse(localStorage.getItem('doctor_info') || '{}');
+      await fetch(`${API_URL}/api/sessions/${sessionId}/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, notes: doctorNotes })
+        body: JSON.stringify({ doctor_id: doctorInfo.doctor_id, notes: doctorNotes })
       });
       setNotesSaved(true);
-      setTimeout(() => setNotesSaved(false), 3000);
+      setTimeout(() => {
+        setNotesSaved(false);
+        navigate('/doctor');
+      }, 1500);
     } catch (e) {
       console.error('Failed to save doctor notes:', e);
     } finally {
@@ -196,9 +258,8 @@ export default function TriageSummary() {
 
       <main className="max-w-4xl mx-auto p-6 md:p-8 mt-4 space-y-6">
         
-        {/* SECTION 1: Patient Information */}
+        {/* SECTION 1: Patient Information (Always Visible) */}
         <section className="bg-white rounded-2xl border-2 border-warmgray p-6 sm:p-8 shadow-sm">
-          <h2 className="text-xl font-bold text-muted uppercase tracking-wider mb-4 border-b border-warmgray pb-2">1. Patient Information</h2>
           <div className="flex justify-between items-start mb-6">
              <h3 className="text-3xl font-display text-charcoal">{session.patient_name}</h3>
              <span className="px-3 py-1 bg-primary/10 text-primary text-sm font-semibold rounded-full font-body">
@@ -212,16 +273,50 @@ export default function TriageSummary() {
           </div>
         </section>
 
-        {/* SECTION 2: Current Complaint and Adaptive Interview */}
-        <section className="bg-white rounded-2xl border-2 border-warmgray p-6 sm:p-8 shadow-sm">
-          <h2 className="text-xl font-bold text-muted uppercase tracking-wider mb-4 border-b border-warmgray pb-2">2. Current Complaint & Interview</h2>
+        {/* SECTION: AI Triage Summary (Always Visible) */}
+        {(summaries.length > 0 || clinicalAlerts) && (
+          <section className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border-2 border-blue-200 p-6 sm:p-8 shadow-sm relative overflow-hidden">
+            <div className="absolute -top-4 -right-4 p-6 opacity-[0.07] pointer-events-none">
+              <BrainCircuit className="w-48 h-48 text-blue-700" />
+            </div>
+            <h2 className="text-xl font-bold text-blue-900 uppercase tracking-wider mb-4 border-b border-blue-200/50 pb-2 flex items-center gap-2 relative z-10">
+              <Sparkles className="w-5 h-5 text-blue-600"/> AI Triage Summary
+            </h2>
+            <div className="space-y-4 relative z-10">
+              {summaries.length > 0 ? (
+                summaries.map(sum => (
+                  <p key={sum.summary_id} className="text-base sm:text-lg text-blue-950 font-medium leading-relaxed whitespace-pre-wrap">
+                    {sum.generated_text}
+                  </p>
+                ))
+              ) : (
+                <p className="text-base sm:text-lg text-blue-950 font-medium leading-relaxed italic">
+                  Patient presented with chief complaint of {session.chief_complaint}. Clinical analysis is ready for review.
+                </p>
+              )}
+              
+              {clinicalAlerts?.analysis?.triage_level && (
+                <div className="mt-6 p-4 bg-white/70 rounded-xl border border-blue-200 backdrop-blur-sm">
+                  <p className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-1">Suggested Triage Level</p>
+                  <p className="text-lg text-blue-950 font-semibold">{clinicalAlerts.analysis.triage_level}</p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* SECTION: Current Complaint & Interview */}
+        <CollapsibleSection 
+          title="Current Complaint & Interview" 
+          defaultOpen={true}
+        >
           <div className="mb-6">
              <p className="text-sm text-muted mb-1">Chief Complaint</p>
              <p className="font-semibold text-charcoal text-xl">{session.chief_complaint}</p>
           </div>
           
           {facts.length === 0 ? (
-            <p className="text-muted italic">No facts recorded for this session.</p>
+            <p className="text-muted italic">No additional facts recorded for this session.</p>
           ) : (
             <div className="space-y-6">
               {facts.map((fact) => (
@@ -276,11 +371,13 @@ export default function TriageSummary() {
               ))}
             </div>
           )}
-        </section>
+        </CollapsibleSection>
 
-        {/* SECTION 3: Medical History Provided by Patient */}
-        <section className="bg-white rounded-2xl border-2 border-warmgray p-6 sm:p-8 shadow-sm">
-          <h2 className="text-xl font-bold text-muted uppercase tracking-wider mb-4 border-b border-warmgray pb-2">3. Medical History Provided by Patient</h2>
+        {/* SECTION: Medical History */}
+        <CollapsibleSection 
+          title="Medical History" 
+          badge={medicalHistory.length === 0 ? "No data" : `${medicalHistory.length} items`}
+        >
           {medicalHistory.length === 0 ? (
             <p className="text-muted italic">No history provided.</p>
           ) : (
@@ -295,11 +392,13 @@ export default function TriageSummary() {
               ))}
             </div>
           )}
-        </section>
+        </CollapsibleSection>
 
-        {/* SECTION 4: AYUSH Assessment */}
-        <section className="bg-white rounded-2xl border-2 border-warmgray p-6 sm:p-8 shadow-sm">
-          <h2 className="text-xl font-bold text-muted uppercase tracking-wider mb-4 border-b border-warmgray pb-2">4. AYUSH Assessment</h2>
+        {/* SECTION: AYUSH Assessment */}
+        <CollapsibleSection 
+          title="AYUSH Assessment" 
+          badge={ayushAssessments.length === 0 ? "No data" : "Available"}
+        >
           {ayushAssessments.length === 0 ? (
             <p className="text-muted italic">No AYUSH assessment recorded.</p>
           ) : (
@@ -312,31 +411,35 @@ export default function TriageSummary() {
               ))}
             </div>
           )}
-        </section>
+        </CollapsibleSection>
 
-        {/* SECTION 5: Medical Documents */}
-        <section className="bg-white rounded-2xl border-2 border-warmgray p-6 sm:p-8 shadow-sm">
-          <h2 className="text-xl font-bold text-muted uppercase tracking-wider mb-4 border-b border-warmgray pb-2">5. Medical Documents</h2>
+        {/* SECTION: Medical Documents */}
+        <CollapsibleSection 
+          title="Medical Documents" 
+          badge={documents.length === 0 ? "No data" : `${documents.length} files`}
+        >
           {documents.length === 0 ? (
             <p className="text-muted italic">No documents uploaded.</p>
           ) : (
             <div className="flex flex-wrap gap-4">
               {documents.map(doc => (
-                <div key={doc.document_id} className="p-4 border border-warmgray rounded-xl flex items-center gap-3">
-                  <div className="w-10 h-10 bg-warmgray/50 rounded-lg flex items-center justify-center">📄</div>
+                <div key={doc.document_id} className="p-4 border border-warmgray rounded-xl flex items-center gap-3 bg-sand/30">
+                  <div className="w-10 h-10 bg-white border border-warmgray rounded-lg flex items-center justify-center">📄</div>
                   <div>
-                    <p className="text-sm font-medium text-charcoal">Medical Record Document</p>
-                    <span className="text-xs text-muted">Status: {doc.ocr_status || 'Processed'}</span>
+                    <a href={doc.file_url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary hover:underline">View Document</a>
+                    <p className="text-xs text-muted mt-0.5">Status: {doc.ocr_status || 'Processed'}</p>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </section>
+        </CollapsibleSection>
 
-        {/* SECTION 6: OCR-Extracted Information */}
-        <section className="bg-white rounded-2xl border-2 border-warmgray p-6 sm:p-8 shadow-sm">
-          <h2 className="text-xl font-bold text-muted uppercase tracking-wider mb-4 border-b border-warmgray pb-2">6. OCR-Extracted Information</h2>
+        {/* SECTION: OCR-Extracted Information */}
+        <CollapsibleSection 
+          title="OCR-Extracted Information" 
+          badge={extractions.length === 0 ? "No data" : `${extractions.length} fields`}
+        >
           {extractions.length === 0 ? (
             <p className="text-muted italic">No data extracted from documents.</p>
           ) : (
@@ -349,29 +452,14 @@ export default function TriageSummary() {
               ))}
             </div>
           )}
-        </section>
+        </CollapsibleSection>
 
-        {/* SECTION 7: System-Derived Information */}
-        <section className="bg-white rounded-2xl border-2 border-warmgray p-6 sm:p-8 shadow-sm">
-          <h2 className="text-xl font-bold text-muted uppercase tracking-wider mb-4 border-b border-warmgray pb-2">7. System-Derived Information</h2>
-          {summaries.length === 0 ? (
-            <p className="text-muted italic">No automated summaries available.</p>
-          ) : (
-            <div className="space-y-4">
-              {summaries.map(sum => (
-                <div key={sum.summary_id} className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                  <p className="text-sm text-blue-900 whitespace-pre-wrap">{sum.generated_text}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* SECTION 8: Red Flags */}
-        <section className="bg-white rounded-2xl border-2 border-warmgray p-6 sm:p-8 shadow-sm">
-          <h2 className="text-xl font-bold text-danger uppercase tracking-wider mb-4 border-b border-danger/20 pb-2 flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5"/> 8. Red Flags
-          </h2>
+        {/* SECTION: Red Flags */}
+        <CollapsibleSection 
+          title="Red Flags" 
+          icon={AlertTriangle}
+          badge={redFlags.length === 0 ? "None" : `${redFlags.length} flags`}
+        >
           {redFlags.length === 0 ? (
             <p className="text-muted italic">No red flags triggered.</p>
           ) : (
@@ -381,11 +469,53 @@ export default function TriageSummary() {
               ))}
             </ul>
           )}
-        </section>
+        </CollapsibleSection>
 
-        {/* SECTION 9: Doctor Notes and Verification */}
+        {/* SECTION: Past Medical Records */}
+        <CollapsibleSection 
+          title="Past Medical Records" 
+          badge={pastVisits.length === 0 ? "None" : `${pastVisits.length} visits`}
+        >
+          {pastVisits.length === 0 ? (
+            <p className="text-muted italic">No past medical records found for this patient.</p>
+          ) : (
+            <div className="space-y-4">
+              {pastVisits.map(visit => (
+                <div key={visit.session_id} className="bg-sand p-4 rounded-xl border border-warmgray">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="font-semibold text-charcoal">{new Date(visit.date).toLocaleDateString()} {new Date(visit.date).toLocaleTimeString()}</p>
+                    <span className="text-xs font-bold bg-white px-2 py-1 rounded border border-warmgray uppercase">{visit.status}</span>
+                  </div>
+                  <p className="text-sm text-charcoal mb-2"><span className="font-semibold">Chief Complaint:</span> {visit.chief_complaint}</p>
+                  
+                  {visit.doctor_notes && (
+                    <div className="bg-white p-3 rounded border border-warmgray mt-2">
+                      <p className="text-xs font-semibold text-muted mb-1">Doctor's Notes:</p>
+                      <p className="text-sm whitespace-pre-wrap">{visit.doctor_notes}</p>
+                    </div>
+                  )}
+
+                  {visit.documents && visit.documents.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-xs font-semibold text-muted mb-1">Documents:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {visit.documents.map(doc => (
+                          <a key={doc.document_id || doc.id} href={doc.file_url} target="_blank" rel="noreferrer" className="text-xs bg-forest text-white px-2 py-1 rounded hover:bg-forest/90">
+                            View Document
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CollapsibleSection>
+
+        {/* SECTION: Doctor Notes and Verification (Always Visible) */}
         <section className="bg-white rounded-2xl border-2 border-warmgray p-6 sm:p-8 shadow-sm">
-          <h2 className="text-xl font-bold text-muted uppercase tracking-wider mb-4 border-b border-warmgray pb-2">9. Doctor Notes and Verification</h2>
+          <h2 className="text-xl font-bold text-muted uppercase tracking-wider mb-4 border-b border-warmgray pb-2">Doctor Notes and Verification</h2>
           <textarea 
             className="w-full min-h-[120px] p-4 border border-warmgray rounded-xl focus:ring-2 focus:ring-primary focus:outline-none text-charcoal"
             placeholder="Add any additional clinical notes here..."

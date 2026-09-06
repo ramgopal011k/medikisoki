@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ClipboardList, AlertTriangle, Search, RefreshCw, Activity, User, ShieldCheck, HeartPulse, Building2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -35,6 +35,9 @@ interface HospitalItem {
 
 export default function DoctorDashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const urlHospitalId = queryParams.get('h');
 
   // Read initial state from localStorage synchronously
   const [doctorInfo] = useState<DoctorInfo | null>(() => {
@@ -49,7 +52,8 @@ export default function DoctorDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'urgent' | 'normal'>('all');
-  const [selectedHospital, setSelectedHospital] = useState<string>('all');
+  const [view, setView] = useState<'pending' | 'verified'>('pending');
+  const [selectedHospital, setSelectedHospital] = useState<string>(urlHospitalId || 'all');
 
   // Fetch registered hospitals dynamically
   useEffect(() => {
@@ -151,10 +155,15 @@ export default function DoctorDashboard() {
 
   if (!doctorInfo) return null;
 
-  const urgentCount = patients.filter(p => (p.red_flag_count || 0) > 0).length;
-  const totalCount = patients.length;
+  const activePatients = patients.filter(p => p.status !== 'verified');
+  const verifiedPatients = patients.filter(p => p.status === 'verified');
+  
+  const urgentCount = activePatients.filter(p => (p.red_flag_count || 0) > 0).length;
+  const totalCount = activePatients.length;
 
-  const filteredPatients = patients.filter(p => {
+  const currentList = view === 'pending' ? activePatients : verifiedPatients;
+
+  const filteredPatients = currentList.filter(p => {
     const matchesSearch = 
       (p.patient_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.chief_complaint || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -267,18 +276,36 @@ export default function DoctorDashboard() {
           </div>
         </div>
 
-        {/* Toolbar: Search, Filters, Refresh */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-warmgray shadow-xs">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-5 h-5 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search by name, complaint, ABHA..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-sand/60 border border-warmgray rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
+        {/* Toolbar: View Tabs, Search, Filters, Refresh */}
+        <div className="flex flex-col xl:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-warmgray shadow-xs">
+          
+          {/* View Tabs */}
+          <div className="flex bg-sand/60 p-1 rounded-xl border border-warmgray text-sm font-semibold w-full xl:w-auto overflow-x-auto">
+            <button
+              onClick={() => setView('pending')}
+              className={`px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${view === 'pending' ? 'bg-white text-charcoal shadow-xs' : 'text-muted hover:text-charcoal'}`}
+            >
+              Pending Verification ({activePatients.length})
+            </button>
+            <button
+              onClick={() => setView('verified')}
+              className={`px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${view === 'verified' ? 'bg-primary text-white shadow-xs' : 'text-muted hover:text-charcoal'}`}
+            >
+              Verified Reports ({verifiedPatients.length})
+            </button>
           </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
+            <div className="relative w-full sm:w-64">
+              <Search className="w-5 h-5 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search name, complaint..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-sand/60 border border-warmgray rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
             <div className="flex bg-sand/60 p-1 rounded-xl border border-warmgray text-xs font-semibold">
@@ -311,6 +338,7 @@ export default function DoctorDashboard() {
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
+          </div>
           </div>
         </div>
 

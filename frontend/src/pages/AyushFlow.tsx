@@ -223,10 +223,10 @@ export default function AyushFlow() {
               : 'Your 6-dimension AYUSH holistic assessment has been recorded.'}
           </p>
           <button
-            onClick={() => navigate('/medical-history')}
+            onClick={() => navigate('/records-upload')}
             className="w-full min-h-[58px] text-lg rounded-[12px] bg-terracotta text-white font-body focus:outline-none focus:ring-2 focus:ring-terracotta focus:ring-offset-2 hover:bg-terracotta/90 transition-colors shadow-sm"
           >
-            {session.language === 'hi' ? 'चिकित्सा इतिहास पर जारी रखें' : 'Continue to Medical History'}
+            {session.language === 'hi' ? 'दस्तावेज़ अपलोड पर जारी रखें' : 'Continue to Document Upload'}
           </button>
           {isSyncing && (
             <p className="text-terracotta text-sm font-body animate-pulse mt-4">Syncing offline data...</p>

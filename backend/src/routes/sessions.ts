@@ -413,5 +413,164 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
+router.post('/:id/verify', async (req, res) => {
+  const { id } = req.params;
+  const { doctor_id } = req.body;
+  
+  try {
+    // 1. Update session status
+    // Note: We use verified_by metadata in a medical_history entry since schema.sql might not have verified_by column on sessions
+    const { error: sessionErr } = await supabase
+      .from('sessions')
+      .update({ status: 'verified', locked: true })
+      .eq('id', id);
+      
+    if (sessionErr) throw sessionErr;
+
+    // 2. Mark answers as verified
+    await supabase.from('answers').update({ verified: true }).eq('session_id', id);
+    
+    // 3. Mark medical_history as verified
+    await supabase.from('medical_history').update({ verified: true }).eq('session_id', id);
+
+    // 4. Mark ocr_extractions as verified (via document_id relation or just via answers table if fallback was used)
+    // Extractions were saved to answers if ocr_extractions failed, so updating answers covers it.
+
+    // 5. Save verification record in medical_history to preserve doctor details
+    if (doctor_id) {
+      await supabase.from('medical_history').insert({
+        session_id: id,
+        category: 'doctor_verification',
+        value: JSON.stringify({
+          verified_by: doctor_id,
+          verified_at: new Date().toISOString()
+        }),
+        provenance: 'doctor_entered',
+        verified: true
+      });
+    }
+
+    // 6. Finalize overall medical report
+    try {
+      await generateTriageSummary(id);
+      await supabase.from('summaries').update({ finalized: true }).eq('session_id', id);
+    } catch (e) {
+      console.warn('Failed to finalize summary on verify:', e);
+    }
+
+    res.json({ success: true, message: 'Session verified successfully' });
+  } catch (err: any) {
+    console.error('Verification error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/:id/history', async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    // 1. Get the patient's dummy_aadhaar from answers or sessions
+    let aadhaar = null;
+    
+    const { data: session } = await supabase.from('sessions').select('dummy_aadhaar').eq('id', id).single();
+    if (session && session.dummy_aadhaar && session.dummy_aadhaar !== '00000000000000') {
+      aadhaar = session.dummy_aadhaar;
+    } else {
+      const { data: aadhaarAnswer } = await supabase.from('answers')
+        .select('answer_text')
+        .eq('session_id', id)
+        .eq('question_id', 'dummy_aadhaar')
+        .single();
+      if (aadhaarAnswer) {
+        aadhaar = aadhaarAnswer.answer_text;
+      }
+    }
+
+    if (!aadhaar) {
+      return res.json({ data: [] });
+    }
+
+    // 2. Find all sessions that have this dummy_aadhaar
+    // We check both the sessions table and the answers table
+    const { data: sessionsWithAadhaar } = await supabase
+      .from('sessions')
+      .select('id')
+      .eq('dummy_aadhaar', aadhaar)
+      .neq('id', id);
+      
+    const { data: answersWithAadhaar } = await supabase
+      .from('answers')
+      .select('session_id')
+      .eq('question_id', 'dummy_aadhaar')
+      .eq('answer_text', aadhaar)
+      .neq('session_id', id);
+
+    const relatedSessionIds = new Set([
+      ...(sessionsWithAadhaar?.map(s => s.id) || []),
+      ...(answersWithAadhaar?.map(a => a.session_id) || [])
+    ]);
+
+    if (relatedSessionIds.size === 0) {
+      return res.json({ data: [] });
+    }
+
+    // 3. Fetch past session details, documents, and doctor notes
+    const { data: pastSessions } = await supabase
+      .from('sessions')
+      .select('id, created_at, status')
+      .in('id', Array.from(relatedSessionIds))
+      .order('created_at', { ascending: false });
+
+    if (!pastSessions) {
+      return res.json({ data: [] });
+    }
+
+    const pastData = await Promise.all(pastSessions.map(async (ps) => {
+      // Chief complaint
+      const { data: complaintAns } = await supabase
+        .from('answers')
+        .select('answer_text')
+        .eq('session_id', ps.id)
+        .eq('question_id', 'chief_complaint')
+        .single();
+
+      // Documents
+      const { data: docs } = await supabase
+        .from('documents')
+        .select('document_id, id, file_url, ocr_status, created_at')
+        .eq('session_id', ps.id);
+
+      // Doctor Notes
+      const { data: notes } = await supabase
+        .from('medical_history')
+        .select('value')
+        .eq('session_id', ps.id)
+        .eq('category', 'doctor_verification')
+        .single();
+        
+      let parsedNotes = null;
+      if (notes && notes.value) {
+        try {
+          parsedNotes = JSON.parse(notes.value);
+        } catch(e) {}
+      }
+
+      return {
+        session_id: ps.id,
+        date: ps.created_at,
+        status: ps.status,
+        chief_complaint: complaintAns?.answer_text || 'General Consultation',
+        documents: docs || [],
+        doctor_notes: parsedNotes
+      };
+    }));
+
+    res.json({ data: pastData });
+  } catch (err: any) {
+    console.error('History fetch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
 

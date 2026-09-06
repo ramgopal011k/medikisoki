@@ -76,6 +76,7 @@ app.get('/api/patient/visits/:abhaId', async (req: Request, res: Response) => {
 });
 
 import hospitalsRouter from './routes/hospitals';
+import documentsRouter from './routes/documents';
 
 // Mount routes
 app.use('/api/sessions', sessionsRouter);
@@ -84,6 +85,8 @@ app.use('/api/answers', answersRouter);
 app.use('/api/summary', summaryRouter);
 app.use('/api/hospitals', hospitalsRouter);
 app.use('/hospitals', hospitalsRouter);
+app.use('/api/documents', documentsRouter);
+app.use('/documents', documentsRouter);
 
 // Doctor authentication endpoint
 app.post('/auth/login', (req: Request, res: Response) => {

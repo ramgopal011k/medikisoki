@@ -71,7 +71,13 @@ function AppRoutes() {
         </div>
       )}
       <Routes>
-        <Route path="/" element={<Navigate to="/consent" replace />} />
+        <Route path="/" element={<AdminHospitals />} />
+        
+        {/* Hospital-specific entry points */}
+        <Route path="/hospital/:hospitalId/kiosk" element={<ConsentFlow />} />
+        <Route path="/hospital/:hospitalId/doctor" element={<DoctorLogin />} />
+        
+        {/* Generic fallbacks */}
         <Route path="/consent" element={<ConsentFlow />} />
         <Route path="/chief-complaint" element={<ChiefComplaint />} />
         <Route path="/interview" element={<InterviewFlow />} />
@@ -95,8 +101,8 @@ function AppRoutes() {
         <Route path="/doctor" element={<Navigate to="/doctor/dashboard" replace />} />
 
         {/* Admin Routes */}
-        <Route path="/admin" element={<Navigate to="/admin/hospitals" replace />} />
-        <Route path="/admin/hospitals" element={<AdminHospitals />} />
+        <Route path="/admin" element={<Navigate to="/" replace />} />
+        <Route path="/admin/hospitals" element={<Navigate to="/" replace />} />
       </Routes>
     </>
   );

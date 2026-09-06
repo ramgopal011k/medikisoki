@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { MandalaBackground } from '@/components/MandalaBackground';
 import { QuestionCard } from '@/components/QuestionCard';
 import { API_URL } from '@/lib/api';
 
 export default function DoctorLogin() {
+  const { hospitalId } = useParams();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,7 +30,9 @@ export default function DoctorLogin() {
 
       localStorage.setItem('doctor_token', data.token);
       localStorage.setItem('doctor_info', JSON.stringify(data.user));
-      navigate('/doctor/dashboard');
+      
+      const dashboardUrl = hospitalId ? `/doctor/dashboard?h=${hospitalId}` : '/doctor/dashboard';
+      navigate(dashboardUrl);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -95,10 +98,11 @@ export default function DoctorLogin() {
                     doctor_id: 'd1111111-1111-1111-1111-111111111111',
                     name: 'Dr. Dev Bypass', 
                     email: 'doctor@demo.com',
-                    hospital_id: '11111111-1111-1111-1111-111111111111',
+                    hospital_id: hospitalId || '11111111-1111-1111-1111-111111111111',
                     uid: 'mock-uid'
                   }));
-                  navigate('/doctor/dashboard');
+                  const dashboardUrl = hospitalId ? `/doctor/dashboard?h=${hospitalId}` : '/doctor/dashboard';
+                  navigate(dashboardUrl);
                 }}
               >
                 Dev Bypass Login

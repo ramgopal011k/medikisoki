@@ -78,18 +78,23 @@ export default function DocumentUploadFlow() {
 
   const startProcessing = async (file: File) => {
     setUploadError(false);
+    setStep('processing');
+    setIsProcessing(true);
 
     try {
-      const res = await fetch(`${API_URL}/documents`, {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (session?.id) {
+        formData.append('session_id', session.id);
+      }
+
+      const res = await fetch(`${API_URL}/api/documents/upload`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: session?.id,
-          file_url: 'local_blob',
-          ocr_status: 'processing'
-        })
+        body: formData
       });
-      if (!res.ok) throw new Error('Failed to create document');
+      
+      if (!res.ok) throw new Error('Failed to upload document');
+      
       const data = await res.json();
       if (data.document_id) {
         setDocumentId(data.document_id);
@@ -99,11 +104,10 @@ export default function DocumentUploadFlow() {
     } catch (err) {
       console.error(err);
       setUploadError(true);
+      setStep('upload');
+      setIsProcessing(false);
       return;
     }
-
-    setStep('processing');
-    setIsProcessing(true);
 
     try {
       const { data: { text } } = await Tesseract.recognize(

@@ -221,7 +221,7 @@ export default function InterviewFlow() {
                   if (localStorage.getItem('ayush_mode') === 'true') {
                     navigate('/ayush-assessment');
                   } else {
-                    navigate('/medical-history');
+                    navigate('/records-upload');
                   }
                 }}
                 className="w-full min-h-[64px] text-xl rounded-[12px] bg-primary text-white font-body focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 hover:bg-primary/90 transition-colors"

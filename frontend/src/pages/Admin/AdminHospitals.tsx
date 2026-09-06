@@ -453,7 +453,7 @@ export default function AdminHospitals() {
                     </div>
 
                     {/* UUID Copy Box */}
-                    <div className="flex items-center justify-between bg-sand/80 px-3 py-2 rounded-xl border border-warmgray/60 mb-4">
+                    <div className="flex items-center justify-between bg-sand/80 px-3 py-2 rounded-xl border border-warmgray/60 mb-2">
                       <div className="text-[11px] font-mono text-muted truncate max-w-[200px]">
                         ID: <span className="text-charcoal font-semibold">{hospitalId.slice(0, 18)}...</span>
                       </div>
@@ -465,9 +465,42 @@ export default function AdminHospitals() {
                         {copiedId === hospitalId ? (
                           <span className="text-success flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Copied</span>
                         ) : (
-                          <span className="flex items-center gap-1"><Copy className="w-3.5 h-3.5" /> Copy ID</span>
+                          <span className="flex items-center gap-1"><Copy className="w-3.5 h-3.5" /> Copy</span>
                         )}
                       </button>
+                    </div>
+
+                    {/* Portals Links */}
+                    <div className="space-y-2 mb-4">
+                      {/* Patient Kiosk URL */}
+                      <div className="flex items-center justify-between bg-blue-50/50 px-3 py-2 rounded-xl border border-blue-100/50">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] uppercase font-bold text-blue-800">Patient Kiosk URL</span>
+                          <span className="text-[11px] text-blue-600 truncate max-w-[180px]">{window.location.origin}/hospital/{hospitalId}/kiosk</span>
+                        </div>
+                        <button
+                          onClick={() => handleCopyId(`${window.location.origin}/hospital/${hospitalId}/kiosk`)}
+                          className="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1 p-1 hover:bg-blue-100 rounded-lg transition"
+                          title="Copy Kiosk URL"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      
+                      {/* Doctor Portal URL */}
+                      <div className="flex items-center justify-between bg-terracotta/5 px-3 py-2 rounded-xl border border-terracotta/10">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] uppercase font-bold text-terracotta">Doctor Portal URL</span>
+                          <span className="text-[11px] text-terracotta/80 truncate max-w-[180px]">{window.location.origin}/hospital/{hospitalId}/doctor</span>
+                        </div>
+                        <button
+                          onClick={() => handleCopyId(`${window.location.origin}/hospital/${hospitalId}/doctor`)}
+                          className="text-xs font-semibold text-terracotta hover:text-terracotta/80 flex items-center gap-1 p-1 hover:bg-terracotta/10 rounded-lg transition"
+                          title="Copy Doctor URL"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
 

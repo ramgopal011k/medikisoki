@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { HeartPulse, Thermometer, Brain, Activity, Wind, CircleHelp, MapPin, Building2, Flower2, Mic, Check } from 'lucide-react';
 import { MandalaBackground } from '../../components/MandalaBackground';
@@ -12,10 +12,11 @@ import { API_URL } from '@/lib/api';
 type Step = 'language' | 'hospital' | 'identity' | 'consent' | 'complaint' | 'success';
 
 export default function ConsentFlow() {
+  const { hospitalId: urlHospitalId } = useParams();
   const [step, setStep] = useState<Step>('language');
   const [language, setLanguage] = useState('');
   const [hospitals, setHospitals] = useState<any[]>([]);
-  const [hospitalId, setHospitalId] = useState('');
+  const [hospitalId, setHospitalId] = useState(urlHospitalId || '');
   const [abhaId, setAbhaId] = useState('');
   const [complaint, setComplaint] = useState('Chest pain');
   const [ayushMode, setAyushMode] = useState(false);
@@ -77,13 +78,18 @@ export default function ConsentFlow() {
   const handleLanguageSelect = (lang: string) => {
     setLanguage(lang);
     localStorage.setItem('patient_language', lang);
-    fetch(`${API_URL}/api/hospitals`)
-      .then(res => res.json())
-      .then(data => {
-        setHospitals(data.data || []);
-        setStep('hospital');
-      })
-      .catch(console.error);
+    if (urlHospitalId) {
+      // If we already have a hospital ID from the URL, skip the hospital selection step
+      setStep('identity');
+    } else {
+      fetch(`${API_URL}/api/hospitals`)
+        .then(res => res.json())
+        .then(data => {
+          setHospitals(data.data || []);
+          setStep('hospital');
+        })
+        .catch(console.error);
+    }
   };
 
   const handleHospitalSelect = (hId: string) => {
