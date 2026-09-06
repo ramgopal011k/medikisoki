@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { InterviewQuestion as QuestionType, InterviewQuestion } from "@/types/interview-tree";
+import type { InterviewQuestion as QuestionType } from "@/types/interview-tree";
 import { QuestionCard } from './QuestionCard';
 import { LeafStepIndicator } from './LeafStepIndicator';
 import { VoiceButton } from './VoiceButton';

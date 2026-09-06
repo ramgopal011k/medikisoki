@@ -1,4 +1,4 @@
-import type { InterviewQuestion as QuestionType, InterviewQuestion } from "@/types/interview-tree";
+import type { InterviewTree } from "@/types/interview-tree";
 
 export const chestPainTree: InterviewTree = {
   complaint: 'Chest pain',

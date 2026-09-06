@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { InterviewQuestion as QuestionType } from "@/types/interview-tree";
+import type { InterviewTree, RedFlagResult } from "@/types/interview-tree";
+import { isRedFlag } from "@/types/interview-tree";
 import { getInterviewTree } from '../lib/trees';
 import { InterviewQuestion } from '../components/InterviewQuestion';
 import { MandalaBackground } from '../components/MandalaBackground';
