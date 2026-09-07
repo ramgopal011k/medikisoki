@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { supabase } from '../supabase';
+import fs from 'fs';
+import path from 'path';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -20,9 +22,12 @@ router.post('/upload', upload.single('file'), async (req: any, res: any) => {
     }
 
     // 1. Upload to Supabase Storage
+    // NOTE: Ensure you have created a public storage bucket named 'medical_records' in your Supabase dashboard.
     const fileExt = file.originalname.split('.').pop();
     const fileName = `${session_id}_${Date.now()}.${fileExt}`;
     const filePath = `${session_id}/${fileName}`;
+
+    let publicUrl = '';
 
     const { data: storageData, error: storageError } = await supabase.storage
       .from('medical_records')
@@ -32,16 +37,22 @@ router.post('/upload', upload.single('file'), async (req: any, res: any) => {
       });
 
     if (storageError) {
-      console.error('Supabase Storage Error:', storageError);
-      return res.status(500).json({ error: 'Failed to upload to cloud storage', details: storageError });
+      console.warn('Supabase Storage Error, falling back to local storage:', storageError.message);
+      // Fallback: save to local disk
+      const uploadDir = path.join(__dirname, '../../uploads', session_id);
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      const localFilePath = path.join(uploadDir, fileName);
+      fs.writeFileSync(localFilePath, file.buffer);
+      publicUrl = `/uploads/${session_id}/${fileName}`;
+    } else {
+      // 2. Get Public URL
+      const { data: urlData } = supabase.storage
+        .from('medical_records')
+        .getPublicUrl(filePath);
+      publicUrl = urlData.publicUrl;
     }
-
-    // 2. Get Public URL
-    const { data: urlData } = supabase.storage
-      .from('medical_records')
-      .getPublicUrl(filePath);
-
-    const publicUrl = urlData.publicUrl;
 
     // 3. Create DB Record in `documents` table
     const { data: docData, error: docError } = await supabase

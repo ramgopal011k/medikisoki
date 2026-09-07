@@ -5,12 +5,13 @@ import { generateTriageSummary } from '../summary';
 const router = Router();
 
 router.post('/', async (req, res) => {
-  const { hospital_id, patient_name, dummy_aadhaar, language, chief_complaint } = req.body;
+  const { hospital_id, patient_name, dummy_aadhaar, language, chief_complaint, age, gender, phone, patient_type } = req.body;
   const validHospitalId = hospital_id || '11111111-1111-1111-1111-111111111111';
   const validLanguage = language || 'en';
   const validComplaint = chief_complaint || 'General Consultation';
   const validName = patient_name || 'Anonymous Patient';
   const validAbha = dummy_aadhaar || '00000000000000';
+  const validPatientType = patient_type || 'existing';
 
   let sessionResult: any = null;
 
@@ -24,7 +25,12 @@ router.post('/', async (req, res) => {
         language: validLanguage,
         status: 'active',
         red_flag: false,
-        locked: false
+        locked: false,
+        dummy_aadhaar: validAbha,
+        age: age || null,
+        gender: gender || null,
+        phone: phone || null,
+        patient_type: validPatientType
       })
       .select()
       .single();
@@ -41,6 +47,11 @@ router.post('/', async (req, res) => {
         patient_name: validName,
         language: validLanguage,
         status: 'active',
+        dummy_aadhaar: validAbha,
+        age: age || null,
+        gender: gender || null,
+        phone: phone || null,
+        patient_type: validPatientType,
         created_at: new Date().toISOString()
       };
     }
@@ -53,6 +64,11 @@ router.post('/', async (req, res) => {
       patient_name: validName,
       language: validLanguage,
       status: 'active',
+      dummy_aadhaar: validAbha,
+      age: age || null,
+      gender: gender || null,
+      phone: phone || null,
+      patient_type: validPatientType,
       created_at: new Date().toISOString()
     };
   }

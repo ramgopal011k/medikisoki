@@ -257,7 +257,7 @@ export default function AdminHospitals() {
               variant="outline"
               size="sm"
               className="border-warmgray rounded-xl h-10 px-3.5 gap-2 text-xs font-semibold text-charcoal hover:bg-sand"
-              onClick={() => navigate('/consent')}
+              onClick={() => navigate('/welcome')}
             >
               <Activity className="w-4 h-4 text-terracotta" />
               Patient Kiosk
@@ -474,7 +474,14 @@ export default function AdminHospitals() {
                       <div className="flex items-center justify-between bg-blue-50/50 px-3 py-2 rounded-xl border border-blue-100/50">
                         <div className="flex flex-col">
                           <span className="text-[10px] uppercase font-bold text-blue-800">Patient Kiosk URL</span>
-                          <span className="text-[11px] text-blue-600 truncate max-w-[180px]">{window.location.origin}/hospital/{hospitalId}/kiosk</span>
+                          <a
+                            href={`${window.location.origin}/hospital/${hospitalId}/kiosk`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-blue-600 truncate max-w-[180px] hover:underline hover:text-blue-800 transition-colors"
+                          >
+                            {window.location.origin}/hospital/{hospitalId}/kiosk
+                          </a>
                         </div>
                         <button
                           onClick={() => handleCopyId(`${window.location.origin}/hospital/${hospitalId}/kiosk`)}
@@ -489,7 +496,14 @@ export default function AdminHospitals() {
                       <div className="flex items-center justify-between bg-terracotta/5 px-3 py-2 rounded-xl border border-terracotta/10">
                         <div className="flex flex-col">
                           <span className="text-[10px] uppercase font-bold text-terracotta">Doctor Portal URL</span>
-                          <span className="text-[11px] text-terracotta/80 truncate max-w-[180px]">{window.location.origin}/hospital/{hospitalId}/doctor</span>
+                          <a
+                            href={`${window.location.origin}/hospital/${hospitalId}/doctor`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-terracotta/80 truncate max-w-[180px] hover:underline hover:text-terracotta transition-colors"
+                          >
+                            {window.location.origin}/hospital/{hospitalId}/doctor
+                          </a>
                         </div>
                         <button
                           onClick={() => handleCopyId(`${window.location.origin}/hospital/${hospitalId}/doctor`)}

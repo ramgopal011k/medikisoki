@@ -12,6 +12,7 @@ import AyushFlow from './pages/AyushFlow';
 import TriageSummary from './pages/TriageSummary';
 import RedFlagLock from './pages/Kiosk/RedFlagLock';
 import PatientSubmitted from './pages/Kiosk/PatientSubmitted';
+import WelcomeScreen from './pages/Kiosk/WelcomeScreen';
 import PatientLogin from './pages/Patient/PatientLogin';
 import PatientDashboard from './pages/Patient/PatientDashboard';
 import AdminHospitals from './pages/Admin/AdminHospitals';
@@ -74,10 +75,12 @@ function AppRoutes() {
         <Route path="/" element={<AdminHospitals />} />
         
         {/* Hospital-specific entry points */}
-        <Route path="/hospital/:hospitalId/kiosk" element={<ConsentFlow />} />
+        <Route path="/hospital/:hospitalId/kiosk" element={<WelcomeScreen />} />
+        <Route path="/hospital/:hospitalId/consent" element={<ConsentFlow />} />
         <Route path="/hospital/:hospitalId/doctor" element={<DoctorLogin />} />
         
         {/* Generic fallbacks */}
+        <Route path="/welcome" element={<WelcomeScreen />} />
         <Route path="/consent" element={<ConsentFlow />} />
         <Route path="/chief-complaint" element={<ChiefComplaint />} />
         <Route path="/interview" element={<InterviewFlow />} />

@@ -2,6 +2,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
 import { supabase } from './supabase';
 
 dotenv.config();
@@ -39,6 +40,9 @@ app.get('/health', (_req: Request, res: Response) => {
 app.get('/', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'medikisoki-backend', timestamp: new Date().toISOString() });
 });
+
+// Serve local uploads
+app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import multer from 'multer';

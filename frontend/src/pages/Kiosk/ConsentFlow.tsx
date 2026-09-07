@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { HeartPulse, Thermometer, Brain, Activity, Wind, CircleHelp, MapPin, Building2, Flower2, Mic, Loader2 } from 'lucide-react';
 import { MandalaBackground } from '../../components/MandalaBackground';
@@ -10,12 +10,15 @@ import { useAsr } from '@/hooks/useAsr';
 import { API_URL } from '@/lib/api';
 import { extractDigitsFromSpokenText, matchSpokenLanguage } from '@/lib/speechUtils';
 
-type Step = 'language' | 'hospital' | 'identity' | 'otp' | 'consent' | 'complaint' | 'success';
+type Step = 'language' | 'hospital' | 'patient_type' | 'new_patient' | 'identity' | 'otp' | 'history' | 'consent' | 'complaint' | 'success';
 
 export default function ConsentFlow() {
   const { hospitalId: urlHospitalId } = useParams();
-  const [step, setStep] = useState<Step>('language');
-  const [language, setLanguage] = useState('');
+  const [searchParams] = useSearchParams();
+  const urlLang = searchParams.get('lang');
+  
+  const [step, setStep] = useState<Step>(urlLang ? (urlHospitalId ? 'patient_type' : 'hospital') : 'language');
+  const [language, setLanguage] = useState(urlLang || '');
   const [hospitals, setHospitals] = useState<any[]>([]);
   const [hospitalId, setHospitalId] = useState(urlHospitalId || '');
   const [abhaId, setAbhaId] = useState('');
@@ -23,9 +26,15 @@ export default function ConsentFlow() {
   const [userOtp, setUserOtp] = useState('');
   const [otpError, setOtpError] = useState('');
   const [complaint, setComplaint] = useState('Chest pain');
+  const [patientType, setPatientType] = useState<'existing' | 'new'>('existing');
+  const [patientName, setPatientName] = useState('');
+  const [patientAge, setPatientAge] = useState('');
+  const [patientGender, setPatientGender] = useState('');
+  const [patientPhone, setPatientPhone] = useState('');
   const [ayushMode, setAyushMode] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [pastVisits, setPastVisits] = useState<any[]>([]);
   const navigate = useNavigate();
 
   const { isListening, isProcessing, transcript, startListening, stopListening } = useAsr();
@@ -47,7 +56,17 @@ export default function ConsentFlow() {
     localStorage.removeItem('patient_session');
     localStorage.removeItem('session_id');
     localStorage.removeItem('chief_complaint');
-  }, []);
+
+    if (urlLang && !urlHospitalId) {
+      // If language was provided but no hospital ID, fetch hospitals
+      fetch(`${API_URL}/api/hospitals`)
+        .then(res => res.json())
+        .then(data => {
+          setHospitals(data.data || []);
+        })
+        .catch(console.error);
+    }
+  }, [urlLang, urlHospitalId]);
 
   // Process ASR voice input based on current step
   useEffect(() => {
@@ -77,6 +96,19 @@ export default function ConsentFlow() {
           handleHospitalSelect(hospitals[0].hospital_id);
         }
       }
+    } else if (step === 'patient_type') {
+      if (lower.includes('abha') || lower.includes('आभा') || lower.includes('yes') || lower.includes('existing')) {
+        setPatientType('existing');
+        setStep('identity');
+      } else if (lower.includes('new') || lower.includes('नया') || lower.includes('no')) {
+        setPatientType('new');
+        setAbhaId(`TEMP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`);
+        setStep('new_patient');
+      }
+    } else if (step === 'new_patient') {
+      if (lower.includes('continue') || lower.includes('next') || lower.includes('आगे')) {
+        setStep('consent');
+      }
     } else if (step === 'identity') {
       // Extract digits from spoken numbers (handles words like "one two" or "एक दो" or digits)
       const digits = extractDigitsFromSpokenText(transcript);
@@ -98,6 +130,17 @@ export default function ConsentFlow() {
           setMockOtp(code);
           setStep('otp');
         }
+      }
+    } else if (step === 'history') {
+      if (
+        lower.includes('continue') ||
+        lower.includes('next') ||
+        lower.includes('आगे') ||
+        lower.includes('नई') ||
+        lower.includes('new')
+      ) {
+        window.speechSynthesis?.cancel();
+        setStep('consent');
       }
     } else if (step === 'consent') {
       if (
@@ -135,7 +178,7 @@ export default function ConsentFlow() {
     localStorage.setItem('patient_language', lang);
     if (urlHospitalId) {
       // If we already have a hospital ID from the URL, skip the hospital selection step
-      setStep('identity');
+      setStep('patient_type');
     } else {
       fetch(`${API_URL}/api/hospitals`)
         .then(res => res.json())
@@ -149,7 +192,7 @@ export default function ConsentFlow() {
 
   const handleHospitalSelect = (hId: string) => {
     setHospitalId(hId);
-    setStep('identity');
+    setStep('patient_type');
   };
 
   const playAudioConsent = () => {
@@ -185,16 +228,25 @@ export default function ConsentFlow() {
     const chiefKey = complaintMap[validComplaint] || validComplaint.toLowerCase().replace(/\s+/g, '_');
 
     try {
+      const payload: any = {
+        hospital_id: validHospitalId,
+        patient_name: patientType === 'new' ? (patientName || 'New Patient') : (validAbha !== '00000000000000' ? `Patient ••${validAbha.slice(-4)}` : 'Patient'),
+        dummy_aadhaar: validAbha,
+        language: validLang,
+        chief_complaint: validComplaint,
+        patient_type: patientType
+      };
+      
+      if (patientType === 'new') {
+        payload.age = patientAge;
+        payload.gender = patientGender;
+        payload.phone = patientPhone;
+      }
+
       const res = await fetch(`${API_URL}/api/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hospital_id: validHospitalId,
-          patient_name: validAbha !== '00000000000000' ? `Patient ••${validAbha.slice(-4)}` : 'Patient',
-          dummy_aadhaar: validAbha,
-          language: validLang,
-          chief_complaint: validComplaint
-        })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       const sessionToken = data.data?.session_token || data.data?.id || crypto.randomUUID();
@@ -351,6 +403,104 @@ export default function ConsentFlow() {
         </div>
       )}
 
+      {step === 'patient_type' && (
+        <QuestionCard className="w-full max-w-2xl mx-auto text-center">
+          <div className="mb-4">
+             <h1 className="font-display text-3xl text-charcoal mb-1">
+                {language === 'hi' ? 'आप क्या हैं?' : 'Are you a new or existing patient?'}
+             </h1>
+          </div>
+          <div className="space-y-4 mt-6">
+            <Button 
+              className="w-full min-h-[58px] text-lg rounded-[12px] bg-primary hover:bg-primary/90 text-white font-body" 
+              onClick={() => {
+                setPatientType('existing');
+                setStep('identity');
+              }}
+            >
+              {language === 'hi' ? 'मेरे पास आभा (ABHA) आईडी है' : 'I have an ABHA ID'}
+            </Button>
+            <Button 
+              className="w-full min-h-[58px] text-lg rounded-[12px] bg-white text-primary border-2 border-primary hover:bg-primary/5 font-body" 
+              onClick={() => {
+                setPatientType('new');
+                setAbhaId(`TEMP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`);
+                setStep('new_patient');
+              }}
+            >
+              {language === 'hi' ? 'मैं एक नया मरीज हूँ' : 'I am a new patient'}
+            </Button>
+            <VoiceActionBar hint='Say "I have ABHA" or "I am new"' />
+          </div>
+        </QuestionCard>
+      )}
+
+      {step === 'new_patient' && (
+        <QuestionCard className="w-full max-w-2xl mx-auto text-center">
+          <div className="mb-4">
+             <h1 className="font-display text-3xl text-charcoal mb-1">
+                {language === 'hi' ? 'नया मरीज पंजीकरण' : 'New Patient Registration'}
+             </h1>
+             <p className="text-sm text-muted">Please fill in your details to continue</p>
+          </div>
+          <div className="space-y-4 mt-6 text-left">
+            <div>
+              <label className="block text-sm font-semibold text-charcoal mb-1">Full Name</label>
+              <input 
+                type="text" 
+                placeholder="John Doe"
+                className="w-full p-3 min-h-[48px] border-2 border-warmgray rounded-[12px] bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-primary font-body"
+                value={patientName}
+                onChange={e => setPatientName(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-charcoal mb-1">Age</label>
+                <input 
+                  type="number" 
+                  placeholder="30"
+                  className="w-full p-3 min-h-[48px] border-2 border-warmgray rounded-[12px] bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-primary font-body"
+                  value={patientAge}
+                  onChange={e => setPatientAge(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-charcoal mb-1">Gender</label>
+                <select 
+                  className="w-full p-3 min-h-[48px] border-2 border-warmgray rounded-[12px] bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-primary font-body"
+                  value={patientGender}
+                  onChange={e => setPatientGender(e.target.value)}
+                >
+                  <option value="">Select...</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-charcoal mb-1">Phone Number (Optional)</label>
+              <input 
+                type="tel" 
+                placeholder="1234567890"
+                className="w-full p-3 min-h-[48px] border-2 border-warmgray rounded-[12px] bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-primary font-body"
+                value={patientPhone}
+                onChange={e => setPatientPhone(e.target.value)}
+              />
+            </div>
+            <Button 
+              className="w-full min-h-[58px] text-lg rounded-[12px] bg-primary hover:bg-primary/90 text-white font-body mt-4" 
+              disabled={!patientName || !patientAge || !patientGender}
+              onClick={() => setStep('consent')}
+            >
+              {language === 'hi' ? 'जारी रखें' : 'Continue'}
+            </Button>
+            <VoiceActionBar hint='Fill details and click Continue' />
+          </div>
+        </QuestionCard>
+      )}
+
       {step === 'identity' && (
         <QuestionCard className="w-full max-w-2xl mx-auto text-center">
           <div className="mb-4">
@@ -412,7 +562,21 @@ export default function ConsentFlow() {
               disabled={userOtp.length < 6}
               onClick={() => {
                 if (userOtp === mockOtp) {
-                  setStep('consent');
+                  // Fetch patient records
+                  fetch(`${API_URL}/api/patient/visits/${abhaId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                      if (data.data && data.data.length > 0) {
+                        setPastVisits(data.data);
+                        setStep('history');
+                      } else {
+                        setStep('consent');
+                      }
+                    })
+                    .catch(err => {
+                      console.error('Failed to fetch history', err);
+                      setStep('consent');
+                    });
                 } else {
                   setOtpError(language === 'hi' ? 'गलत ओटीपी' : 'Invalid OTP. Please try again.');
                 }
@@ -421,6 +585,37 @@ export default function ConsentFlow() {
               {language === 'hi' ? 'सत्यापित करें' : 'Verify'}
             </Button>
           </div>
+        </QuestionCard>
+      )}
+
+      {step === 'history' && (
+        <QuestionCard className="w-full max-w-2xl mx-auto flex flex-col items-center">
+           <div className="mb-4 text-center">
+             <h1 className="font-display text-3xl text-charcoal mb-1">
+                {language === 'hi' ? 'पिछले रिकॉर्ड' : 'Past Records Found'}
+             </h1>
+             <p className="text-sm text-muted">We found previous visits linked to this ABHA ID.</p>
+           </div>
+           
+           <div className="w-full max-h-[300px] overflow-y-auto space-y-3 mt-4 pr-2">
+             {pastVisits.map((visit: any) => (
+               <div key={visit.id} className="p-4 bg-white border border-warmgray rounded-xl shadow-sm text-left">
+                 <div className="flex justify-between items-start mb-2">
+                   <div className="font-semibold text-charcoal">{new Date(visit.created_at).toLocaleDateString()}</div>
+                   <div className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full">{visit.status}</div>
+                 </div>
+                 <div className="text-sm text-muted"><strong>Complaint:</strong> {visit.chief_complaint}</div>
+               </div>
+             ))}
+           </div>
+           
+           <Button 
+             className="w-full min-h-[58px] text-lg rounded-[12px] bg-primary hover:bg-primary/90 text-white font-body mt-6" 
+             onClick={() => setStep('consent')}
+           >
+             {language === 'hi' ? 'नई विजिट के रूप में जारी रखें' : 'Continue as New Visit'}
+           </Button>
+           <VoiceActionBar hint='Say "Continue"' />
         </QuestionCard>
       )}
 
