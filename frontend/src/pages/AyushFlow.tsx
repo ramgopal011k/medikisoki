@@ -20,9 +20,9 @@ interface AyushAssessment {
   value: string;
 }
 
-type AyushStep = 'prakriti' | 'vikriti' | 'agni' | 'koshtha' | 'ahara_vihara' | 'sattva';
+type AyushStep = 'prakriti' | 'vikriti' | 'agni' | 'koshtha' | 'ahara_vihara' | 'sattva' | 'sara' | 'samhanana' | 'pramana' | 'satmya' | 'vyayama_shakti' | 'vaya';
 
-const steps: AyushStep[] = ['prakriti', 'vikriti', 'agni', 'koshtha', 'ahara_vihara', 'sattva'];
+const steps: AyushStep[] = ['prakriti', 'vikriti', 'agni', 'koshtha', 'ahara_vihara', 'sattva', 'sara', 'samhanana', 'pramana', 'satmya', 'vyayama_shakti', 'vaya'];
 
 const stepContent: Record<AyushStep, { en: string; hi: string; title: string; options: { id: string; en: string; hi: string }[] }> = {
   prakriti: {
@@ -87,6 +87,66 @@ const stepContent: Record<AyushStep, { en: string; hi: string; title: string; op
       { id: 'strong', en: 'Pravara Sattva (Calm, highly resilient, patient under stress)', hi: 'प्रवर सत्व (शांत, अत्यंत धैर्यवान और सहनशील)' },
       { id: 'moderate', en: 'Madhyama Sattva (Moderate tolerance, manage with reassurance)', hi: 'मध्यम सत्व (सामान्य सहनशीलता, समझाने पर नियंत्रण)' },
       { id: 'weak', en: 'Avara Sattva (Easily overwhelmed, anxious, low pain tolerance)', hi: 'अवर सत्व (जल्दी घबरा जाने वाले, कम सहनशक्ति)' }
+    ]
+  },
+  sara: {
+    title: '7. Sara Pariksha (Tissue Quality)',
+    en: 'How is the overall quality and strength of your bodily tissues (skin, muscles, bones)?',
+    hi: 'आपकी शारीरिक धातुओं (त्वचा, मांसपेशियां, हड्डियां) की गुणवत्ता कैसी है?',
+    options: [
+      { id: 'excellent', en: 'Excellent (Clear skin, strong muscles/bones, radiant)', hi: 'उत्तम (साफ त्वचा, मजबूत मांसपेशियां/हड्डियां)' },
+      { id: 'moderate', en: 'Moderate (Average strength, occasional issues)', hi: 'मध्यम (सामान्य ताकत, कभी-कभी समस्याएं)' },
+      { id: 'weak', en: 'Weak (Dry skin, weak muscles/bones, prone to injury)', hi: 'अवर (सूखी त्वचा, कमजोर मांसपेशियां, चोट लगने की संभावना)' }
+    ]
+  },
+  samhanana: {
+    title: '8. Samhanana Pariksha (Physical Build & Compactness)',
+    en: 'How would you describe your overall physical build and structural compactness?',
+    hi: 'आप अपनी शारीरिक बनावट और सुगठन का वर्णन कैसे करेंगे?',
+    options: [
+      { id: 'compact', en: 'Well-built & Compact (Strong, well-proportioned body)', hi: 'सुगठित (मजबूत, सुपाच्य शरीर)' },
+      { id: 'moderate', en: 'Moderate Build (Average body structure)', hi: 'मध्यम (सामान्य शारीरिक संरचना)' },
+      { id: 'loose', en: 'Loose/Frail Build (Weak, poorly proportioned)', hi: 'दुर्बल/शिथिल (कमजोर संरचना)' }
+    ]
+  },
+  pramana: {
+    title: '9. Pramana Pariksha (Body Proportions)',
+    en: 'Are your body proportions (height, weight, limb length) balanced and normal?',
+    hi: 'क्या आपके शरीर का अनुपात (ऊंचाई, वजन) संतुलित है?',
+    options: [
+      { id: 'balanced', en: 'Balanced & Normal', hi: 'संतुलित और सामान्य' },
+      { id: 'overweight', en: 'Excessive (Overweight, heavily built)', hi: 'अत्यधिक (अधिक वजन, भारी)' },
+      { id: 'underweight', en: 'Deficient (Underweight, very thin)', hi: 'न्यून (कम वजन, बहुत पतला)' }
+    ]
+  },
+  satmya: {
+    title: '10. Satmya Pariksha (Adaptability & Habituation)',
+    en: 'How well do you adapt to changes in diet, weather, and surroundings?',
+    hi: 'आप आहार, मौसम और परिवेश में बदलाव के प्रति कितने अनुकूल हैं?',
+    options: [
+      { id: 'excellent', en: 'Excellent (Adapt to all tastes and seasons easily)', hi: 'उत्तम (सभी स्वादों और मौसमों के अनुकूल)' },
+      { id: 'moderate', en: 'Moderate (Adapt to most things, some sensitivities)', hi: 'मध्यम (अधिकांश चीजों के अनुकूल, कुछ संवेदनशीलता)' },
+      { id: 'poor', en: 'Poor (Very sensitive to changes in diet/weather)', hi: 'अवर (आहार/मौसम में बदलाव के प्रति बहुत संवेदनशील)' }
+    ]
+  },
+  vyayama_shakti: {
+    title: '11. Vyayama Shakti (Physical Strength & Exercise Capacity)',
+    en: 'What is your capacity for physical exercise and strenuous work?',
+    hi: 'शारीरिक व्यायाम और कठिन परिश्रम करने की आपकी क्षमता क्या है?',
+    options: [
+      { id: 'high', en: 'High (Can perform heavy work without easily tiring)', hi: 'उत्तम (बिना थके भारी काम कर सकते हैं)' },
+      { id: 'moderate', en: 'Moderate (Average stamina, get tired eventually)', hi: 'मध्यम (सामान्य स्टेमिना)' },
+      { id: 'low', en: 'Low (Get exhausted quickly with minimal exertion)', hi: 'अवर (थोड़े परिश्रम से जल्दी थक जाते हैं)' }
+    ]
+  },
+  vaya: {
+    title: '12. Vaya Pariksha (Age & Aging Process)',
+    en: 'How do you relate to your current stage of life and aging?',
+    hi: 'आप अपने जीवन के वर्तमान चरण और उम्र बढ़ने की प्रक्रिया को कैसे देखते हैं?',
+    options: [
+      { id: 'youth', en: 'Youth/Growing Phase (High energy, active growth)', hi: 'बाल्य/युवावस्था (उच्च ऊर्जा, सक्रिय वृद्धि)' },
+      { id: 'middle', en: 'Middle Age (Stable energy, maintenance phase)', hi: 'मध्यम आयु (स्थिर ऊर्जा)' },
+      { id: 'old', en: 'Old Age (Declining energy, tissue wear and tear)', hi: 'वृद्धावस्था (घटती ऊर्जा, ऊतकों का क्षय)' }
     ]
   }
 };
@@ -153,24 +213,50 @@ export default function AyushFlow() {
   // ASR Voice recognition matching
   useEffect(() => {
     if (!transcript || !content) return;
-    const lower = transcript.toLowerCase();
+    
+    const matchTranscript = async () => {
+      const lower = transcript.toLowerCase();
 
-    // Check if spoken text matches any option label or keyword
-    for (const opt of content.options) {
-      const optEn = opt.en.toLowerCase();
-      const optHi = opt.hi.toLowerCase();
-      const optId = opt.id.toLowerCase();
+      // Check if spoken text matches any option label or keyword
+      for (const opt of content.options) {
+        const optEn = opt.en.toLowerCase();
+        const optHi = opt.hi.toLowerCase();
+        const optId = opt.id.toLowerCase();
 
-      if (
-        lower.includes(optId) ||
-        lower.includes(optEn.split(' ')[0]) ||
-        lower.includes(optHi.split(' ')[0]) ||
-        lower.includes(optEn)
-      ) {
-        handleAnswer(opt.id);
-        break;
+        if (
+          lower.includes(optId) ||
+          lower.includes(optEn.split(' ')[0]) ||
+          lower.includes(optHi.split(' ')[0]) ||
+          lower.includes(optEn)
+        ) {
+          handleAnswer(opt.id);
+          return;
+        }
       }
-    }
+
+      // Fallback to Gemini semantic matching
+      try {
+        const optionsForGemini = content.options.map(opt => ({
+          value: opt.id,
+          label: `${opt.en} / ${opt.hi}`
+        }));
+        
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/match-voice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: transcript, options: optionsForGemini })
+        });
+        const data = await res.json();
+        if (data.match) {
+          handleAnswer(data.match);
+        }
+      } catch (err) {
+        console.error('Failed to match voice via Gemini:', err);
+      }
+    };
+    
+    matchTranscript();
+    // eslint-disable-next-line
   }, [transcript, content]);
 
   const handleAnswer = async (value: string) => {
@@ -293,7 +379,7 @@ export default function AyushFlow() {
                 onClick={() => (isListening ? stopListening() : startListening({ lang: session.language === 'hi' ? 'hi-IN' : 'en-IN' }))}
                 className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-md ${
                   isListening 
-                    ? 'bg-danger text-white animate-pulse scale-110' 
+                    ? 'bg-terracotta text-white scale-105 ring-2 ring-terracotta/40' 
                     : 'bg-terracotta text-white hover:bg-terracotta/90'
                 }`}
                 title="Speak your answer"

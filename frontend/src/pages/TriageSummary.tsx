@@ -118,6 +118,7 @@ export default function TriageSummary() {
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [pastVisits, setPastVisits] = useState<PastVisit[]>([]);
   const [clinicalAlerts, setClinicalAlerts] = useState<any>(null);
+  const [reconciliationConflicts, setReconciliationConflicts] = useState<{field: string, documentValue: string, patientValue: string}[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
   
@@ -170,6 +171,33 @@ export default function TriageSummary() {
             }
           } catch (e) {
             console.error('Failed to load past visits', e);
+          }
+
+          // Reconciliation logic
+          if (!ignore) {
+            const conflicts: { field: string, documentValue: string, patientValue: string }[] = [];
+            
+            (triageData.extractions || []).forEach((ext: any) => {
+              const fieldLower = ext.field_name.toLowerCase();
+              if (fieldLower.includes('patient') || fieldLower.includes('name')) return; // skip name
+              
+              // Check medical history
+              const medMatch = (triageData.medicalHistory || []).find((m: any) => 
+                m.category.toLowerCase().includes(fieldLower) || fieldLower.includes(m.category.toLowerCase())
+              );
+              
+              if (medMatch && medMatch.value && ext.field_value && medMatch.value.toLowerCase().trim() !== ext.field_value.toLowerCase().trim()) {
+                // simple heuristic for mismatch
+                if (!medMatch.value.toLowerCase().includes(ext.field_value.toLowerCase()) && !ext.field_value.toLowerCase().includes(medMatch.value.toLowerCase())) {
+                  conflicts.push({
+                    field: ext.field_name,
+                    documentValue: ext.field_value,
+                    patientValue: medMatch.value
+                  });
+                }
+              }
+            });
+            setReconciliationConflicts(conflicts);
           }
         }
       } catch (err) {
@@ -243,6 +271,23 @@ export default function TriageSummary() {
     }
   };
 
+  const handleAcknowledgeRedFlags = async () => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`${API_URL}/sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ red_flag: false })
+      });
+      if (res.ok) {
+        setSession(prev => prev ? { ...prev, red_flag: false } : null);
+        setRedFlags([]);
+      }
+    } catch (err) {
+      console.error('Failed to acknowledge red flags', err);
+    }
+  };
+
   if (isLoading) return <div className="min-h-screen bg-sand flex items-center justify-center font-body text-xl">Loading triage summary...</div>;
   if (!session) return <div className="min-h-screen bg-sand flex items-center justify-center font-body text-xl">Session not found.</div>;
 
@@ -284,11 +329,105 @@ export default function TriageSummary() {
             </h2>
             <div className="space-y-4 relative z-10">
               {summaries.length > 0 ? (
-                summaries.map(sum => (
-                  <p key={sum.summary_id} className="text-base sm:text-lg text-blue-950 font-medium leading-relaxed whitespace-pre-wrap">
-                    {sum.generated_text}
-                  </p>
-                ))
+                summaries.map(sum => {
+                  let parsed: any = null;
+                  let completenessObj = null;
+                  try {
+                    if (typeof (sum as any).content === 'object' && (sum as any).content !== null) {
+                      parsed = (sum as any).content;
+                      if (parsed.completeness) completenessObj = parsed.completeness;
+                    }
+                  } catch (_e) {}
+
+                  return (
+                    <div key={sum.summary_id} className="space-y-4">
+                      {parsed ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="col-span-1 md:col-span-2">
+                            <h4 className="text-sm font-bold text-blue-900 uppercase">Chief Complaint</h4>
+                            <p className="text-blue-950">{parsed.chief_complaint || 'N/A'}</p>
+                          </div>
+                          <div className="col-span-1 md:col-span-2">
+                            <h4 className="text-sm font-bold text-blue-900 uppercase">History of Present Illness (HPI)</h4>
+                            <ul className="list-disc pl-5 text-blue-950">
+                              {(parsed.hpi || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
+                            </ul>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-blue-900 uppercase">Past Medical History</h4>
+                            <ul className="list-disc pl-5 text-blue-950">
+                              {(parsed.pmh || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
+                            </ul>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-blue-900 uppercase">Past Surgical History</h4>
+                            <ul className="list-disc pl-5 text-blue-950">
+                              {(parsed.psh || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
+                            </ul>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-blue-900 uppercase">Drug History</h4>
+                            <ul className="list-disc pl-5 text-blue-950">
+                              {(parsed.drug_history || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
+                            </ul>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-blue-900 uppercase">Allergy History</h4>
+                            <ul className="list-disc pl-5 text-blue-950">
+                              {(parsed.allergy_history || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
+                            </ul>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-blue-900 uppercase">Family History</h4>
+                            <ul className="list-disc pl-5 text-blue-950">
+                              {(parsed.family_history || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
+                            </ul>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-blue-900 uppercase">Personal History</h4>
+                            <ul className="list-disc pl-5 text-blue-950">
+                              {(parsed.personal_history || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
+                            </ul>
+                          </div>
+                          <div className="col-span-1 md:col-span-2">
+                            <h4 className="text-sm font-bold text-blue-900 uppercase">Review of Systems</h4>
+                            <ul className="list-disc pl-5 text-blue-950">
+                              {(parsed.ros || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
+                            </ul>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-base sm:text-lg text-blue-950 font-medium leading-relaxed whitespace-pre-wrap">
+                          {sum.generated_text}
+                        </p>
+                      )}
+                      
+                      {completenessObj && (
+                        <div className="mt-4 bg-white/60 p-4 rounded-xl border border-blue-200">
+                           <div className="flex justify-between items-center mb-2">
+                             <p className="text-sm font-bold text-blue-900 uppercase tracking-wider">Data Completeness Score</p>
+                             <span className={`px-3 py-1 rounded-full text-xs font-bold ${completenessObj.score >= 80 ? 'bg-success/20 text-success' : 'bg-warning/20 text-warning'}`}>
+                               {completenessObj.score}%
+                             </span>
+                           </div>
+                           <div className="w-full bg-blue-100 rounded-full h-2 mb-3">
+                             <div className={`h-2 rounded-full ${completenessObj.score >= 80 ? 'bg-success' : 'bg-warning'}`} style={{ width: `${completenessObj.score}%` }}></div>
+                           </div>
+                           {completenessObj.missing_fields && completenessObj.missing_fields.length > 0 && (
+                             <div>
+                               <p className="text-xs text-blue-800 font-semibold mb-1">Missing Information:</p>
+                               <div className="flex flex-wrap gap-2">
+                                 {completenessObj.missing_fields.map((mf: string, i: number) => (
+                                   <span key={i} className="text-xs bg-danger/10 text-danger border border-danger/20 px-2 py-0.5 rounded">{mf}</span>
+                                 ))}
+                               </div>
+                             </div>
+                           )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               ) : (
                 <p className="text-base sm:text-lg text-blue-950 font-medium leading-relaxed italic">
                   Patient presented with chief complaint of {session.chief_complaint}. Clinical analysis is ready for review.
@@ -440,6 +579,38 @@ export default function TriageSummary() {
           title="OCR-Extracted Information" 
           badge={extractions.length === 0 ? "No data" : `${extractions.length} fields`}
         >
+          {reconciliationConflicts.length > 0 && (
+            <div className="mb-6 bg-terracotta/10 border border-terracotta/20 rounded-xl p-4">
+              <h3 className="text-terracotta font-bold flex items-center gap-2 mb-2">
+                <AlertTriangle className="w-5 h-5" />
+                Patient-Document Reconciliation Conflicts
+              </h3>
+              <p className="text-sm text-terracotta/90 mb-3">
+                The following information extracted from the patient's documents conflicts with their reported medical history:
+              </p>
+              <div className="space-y-3">
+                {reconciliationConflicts.map((conflict, idx) => (
+                  <div key={idx} className="bg-white/60 p-3 rounded-lg border border-terracotta/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-bold text-terracotta uppercase tracking-wider mb-1">{conflict.field}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-charcoal">Document:</span>
+                        <span className="text-sm text-charcoal/80 line-clamp-1">{conflict.documentValue}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-sm font-semibold text-charcoal">Patient:</span>
+                        <span className="text-sm text-charcoal/80 line-clamp-1">{conflict.patientValue}</span>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" className="text-terracotta border-terracotta/30 hover:bg-terracotta/5 whitespace-nowrap">
+                      Resolve Conflict
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {extractions.length === 0 ? (
             <p className="text-muted italic">No data extracted from documents.</p>
           ) : (
@@ -461,13 +632,18 @@ export default function TriageSummary() {
           badge={redFlags.length === 0 ? "None" : `${redFlags.length} flags`}
         >
           {redFlags.length === 0 ? (
-            <p className="text-muted italic">No red flags triggered.</p>
+            <p className="text-muted italic">No red flags triggered or they have been acknowledged.</p>
           ) : (
-            <ul className="list-disc list-inside text-danger space-y-2">
-              {redFlags.map(rf => (
-                <li key={rf.flag_id} className="font-body text-sm font-medium">Rule Match: {rf.rule_id} (at {new Date(rf.created_at).toLocaleTimeString()})</li>
-              ))}
-            </ul>
+            <div>
+              <ul className="list-disc list-inside text-danger space-y-2 mb-4">
+                {redFlags.map(rf => (
+                  <li key={rf.flag_id} className="font-body text-sm font-medium">Rule Match: {rf.rule_id} (at {new Date(rf.created_at).toLocaleTimeString()})</li>
+                ))}
+              </ul>
+              <Button onClick={handleAcknowledgeRedFlags} className="bg-danger text-white hover:bg-danger/90">
+                Acknowledge and Clear Flags
+              </Button>
+            </div>
           )}
         </CollapsibleSection>
 

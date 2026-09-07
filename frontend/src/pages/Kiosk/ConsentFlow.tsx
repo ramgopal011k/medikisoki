@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
-import { HeartPulse, Thermometer, Brain, Activity, Wind, CircleHelp, MapPin, Building2, Flower2, Mic, Check } from 'lucide-react';
+import { HeartPulse, Thermometer, Brain, Activity, Wind, CircleHelp, MapPin, Building2, Flower2, Mic, Loader2 } from 'lucide-react';
 import { MandalaBackground } from '../../components/MandalaBackground';
 import { LeafStepIndicator } from '../../components/LeafStepIndicator';
 import { AudioExplanationButton } from '../../components/AudioExplanationButton';
 import { QuestionCard } from '../../components/QuestionCard';
 import { useAsr } from '@/hooks/useAsr';
 import { API_URL } from '@/lib/api';
+import { extractDigitsFromSpokenText, matchSpokenLanguage } from '@/lib/speechUtils';
 
-type Step = 'language' | 'hospital' | 'identity' | 'consent' | 'complaint' | 'success';
+type Step = 'language' | 'hospital' | 'identity' | 'otp' | 'consent' | 'complaint' | 'success';
 
 export default function ConsentFlow() {
   const { hospitalId: urlHospitalId } = useParams();
@@ -18,13 +19,29 @@ export default function ConsentFlow() {
   const [hospitals, setHospitals] = useState<any[]>([]);
   const [hospitalId, setHospitalId] = useState(urlHospitalId || '');
   const [abhaId, setAbhaId] = useState('');
+  const [mockOtp, setMockOtp] = useState('');
+  const [userOtp, setUserOtp] = useState('');
+  const [otpError, setOtpError] = useState('');
   const [complaint, setComplaint] = useState('Chest pain');
   const [ayushMode, setAyushMode] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const navigate = useNavigate();
 
-  const { isListening, transcript, startListening, stopListening } = useAsr();
+  const { isListening, isProcessing, transcript, startListening, stopListening } = useAsr();
+
+  const baseAbhaIdRef = useRef('');
+
+  const wasListeningRef = useRef(false);
+
+  useEffect(() => {
+    if (isListening && !wasListeningRef.current) {
+      baseAbhaIdRef.current = abhaId;
+      wasListeningRef.current = true;
+    } else if (!isListening) {
+      wasListeningRef.current = false;
+    }
+  }, [isListening, abhaId]);
 
   useEffect(() => {
     localStorage.removeItem('patient_session');
@@ -35,44 +52,82 @@ export default function ConsentFlow() {
   // Process ASR voice input based on current step
   useEffect(() => {
     if (!transcript) return;
-    const lower = transcript.toLowerCase();
+    const lower = transcript.toLowerCase().trim();
 
     if (step === 'language') {
-      if (lower.includes('hindi') || lower.includes('हिंदी') || lower.includes('hind')) {
-        handleLanguageSelect('hi');
-      } else if (lower.includes('english') || lower.includes('अंग्रेजी') || lower.includes('eng')) {
-        handleLanguageSelect('en');
+      const matched = matchSpokenLanguage(transcript);
+      if (matched) {
+        handleLanguageSelect(matched);
       }
     } else if (step === 'hospital') {
       if (hospitals.length > 0) {
-        // match hospital name or first hospital
-        const match = hospitals.find(h => lower.includes(h.hospital_name.toLowerCase()) || lower.includes(h.location.toLowerCase()));
+        const match = hospitals.find(
+          (h) =>
+            lower.includes(h.hospital_name.toLowerCase()) ||
+            lower.includes(h.location.toLowerCase())
+        );
         if (match) {
           handleHospitalSelect(match.hospital_id);
-        } else if (lower.includes('one') || lower.includes('first') || lower.includes('पहला')) {
+        } else if (
+          lower.includes('one') ||
+          lower.includes('first') ||
+          lower.includes('पहला') ||
+          lower.includes('1')
+        ) {
           handleHospitalSelect(hospitals[0].hospital_id);
         }
       }
     } else if (step === 'identity') {
-      // Extract digits from spoken text
-      const digits = transcript.replace(/\D/g, '');
+      // Extract digits from spoken numbers (handles words like "one two" or "एक दो" or digits)
+      const digits = extractDigitsFromSpokenText(transcript);
       if (digits.length > 0) {
-        setAbhaId(prev => (prev + digits).slice(0, 14));
+        const nextId = (baseAbhaIdRef.current + digits).slice(0, 14);
+        setAbhaId(nextId);
+
+        // If all 14 digits reached or user says continue, advance to OTP
+        if (nextId.length >= 14 || lower.includes('continue') || lower.includes('next') || lower.includes('आगे')) {
+          window.speechSynthesis?.cancel();
+          const code = Math.floor(100000 + Math.random() * 900000).toString();
+          setMockOtp(code);
+          setStep('otp');
+        }
+      } else if (lower.includes('continue') || lower.includes('next') || lower.includes('आगे')) {
+        if (abhaId.length >= 14) {
+          window.speechSynthesis?.cancel();
+          const code = Math.floor(100000 + Math.random() * 900000).toString();
+          setMockOtp(code);
+          setStep('otp');
+        }
       }
     } else if (step === 'consent') {
-      if (lower.includes('agree') || lower.includes('yes') || lower.includes('हाँ') || lower.includes('सहमत') || lower.includes('ok') || lower.includes('continue')) {
+      if (
+        lower.includes('agree') ||
+        lower.includes('yes') ||
+        lower.includes('हाँ') ||
+        lower.includes('सहमत') ||
+        lower.includes('ok') ||
+        lower.includes('continue')
+      ) {
         window.speechSynthesis?.cancel();
         setStep('complaint');
       }
     } else if (step === 'complaint') {
       if (lower.includes('chest') || lower.includes('छाती')) setComplaint('Chest pain');
       else if (lower.includes('fever') || lower.includes('बुखार')) setComplaint('Fever');
-      else if (lower.includes('stomach') || lower.includes('abdomen') || lower.includes('abdominal') || lower.includes('पेट')) setComplaint('Abdominal pain');
-      else if (lower.includes('head') || lower.includes('headache') || lower.includes('सिर')) setComplaint('Headache');
+      else if (
+        lower.includes('stomach') ||
+        lower.includes('abdomen') ||
+        lower.includes('abdominal') ||
+        lower.includes('पेट')
+      )
+        setComplaint('Abdominal pain');
+      else if (lower.includes('head') || lower.includes('headache') || lower.includes('सिर'))
+        setComplaint('Headache');
       else if (lower.includes('back') || lower.includes('पीठ')) setComplaint('Back pain');
       else if (lower.includes('cough') || lower.includes('खांसी')) setComplaint('Cough');
       else if (lower.includes('other') || lower.includes('अन्य')) setComplaint('Other');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript, step, hospitals]);
 
   const handleLanguageSelect = (lang: string) => {
@@ -183,23 +238,41 @@ export default function ConsentFlow() {
   };
 
   // Reusable Voice ASR Bar Component for each slide
+  // eslint-disable-next-line
   const VoiceActionBar = ({ hint }: { hint: string }) => (
     <div className="flex flex-col items-center mt-6 pt-4 border-t border-warmgray/60 w-full">
       <div className="flex items-center gap-3">
         <button
           type="button"
-          onClick={() => (isListening ? stopListening() : startListening({ lang: language === 'hi' ? 'hi-IN' : 'en-IN' }))}
+          disabled={isProcessing}
+          onClick={() =>
+            isListening
+              ? stopListening()
+              : startListening({ lang: language === 'hi' ? 'hi-IN' : 'en-IN' })
+          }
           className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-md ${
-            isListening 
-              ? 'bg-danger text-white animate-pulse scale-110' 
+            isListening
+              ? 'bg-primary text-white scale-105 ring-2 ring-primary/40'
+              : isProcessing
+              ? 'bg-amber-600 text-white'
               : 'bg-primary text-white hover:bg-primary/90'
           }`}
           title="Speak your response"
         >
-          <Mic className="w-5 h-5" />
+          {isProcessing ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <Mic className="w-5 h-5" />
+          )}
         </button>
         <div className="text-left">
-          <p className="text-xs font-semibold text-charcoal">{isListening ? 'Listening...' : 'Voice Input (ASR)'}</p>
+          <p className="text-xs font-semibold text-charcoal">
+            {isProcessing
+              ? 'Processing Audio...'
+              : isListening
+              ? 'Listening (tap to finish)...'
+              : 'Voice Input (ASR)'}
+          </p>
           <p className="text-xs text-muted">{hint}</p>
         </div>
       </div>
@@ -297,11 +370,56 @@ export default function ConsentFlow() {
             <Button 
               className="w-full min-h-[58px] text-lg rounded-[12px] bg-primary hover:bg-primary/90 text-white font-body" 
               disabled={abhaId.length < 14}
-              onClick={() => setStep('consent')}
+              onClick={() => {
+                const code = Math.floor(100000 + Math.random() * 900000).toString();
+                setMockOtp(code);
+                setStep('otp');
+              }}
             >
               {language === 'hi' ? 'जारी रखें' : 'Continue'}
             </Button>
             <VoiceActionBar hint='Speak 14 digits or say your ABHA ID' />
+          </div>
+        </QuestionCard>
+      )}
+
+      {step === 'otp' && (
+        <QuestionCard className="w-full max-w-2xl mx-auto text-center">
+          <div className="mb-4">
+             <h1 className="font-display text-3xl text-charcoal mb-1">
+                {language === 'hi' ? 'ओटीपी दर्ज करें' : 'Enter OTP'}
+             </h1>
+             <p className="text-sm text-muted">A verification code has been sent to your registered number.</p>
+             <div className="mt-4 p-3 bg-blue-50 text-blue-800 rounded-lg text-sm border border-blue-200">
+               Mock OTP (for demo): <span className="font-bold tracking-widest ml-2 text-lg">{mockOtp}</span>
+             </div>
+          </div>
+          <div className="space-y-4 mt-6">
+            <input 
+              type="text" 
+              placeholder="123456"
+              maxLength={6}
+              className="w-full text-center text-3xl tracking-[0.3em] p-5 min-h-[64px] border-2 border-warmgray rounded-[12px] bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-primary font-body"
+              value={userOtp}
+              onChange={e => {
+                setOtpError('');
+                setUserOtp(e.target.value.replace(/\D/g, ''));
+              }}
+            />
+            {otpError && <p className="text-red-500 text-sm font-semibold">{otpError}</p>}
+            <Button 
+              className="w-full min-h-[58px] text-lg rounded-[12px] bg-primary hover:bg-primary/90 text-white font-body" 
+              disabled={userOtp.length < 6}
+              onClick={() => {
+                if (userOtp === mockOtp) {
+                  setStep('consent');
+                } else {
+                  setOtpError(language === 'hi' ? 'गलत ओटीपी' : 'Invalid OTP. Please try again.');
+                }
+              }}
+            >
+              {language === 'hi' ? 'सत्यापित करें' : 'Verify'}
+            </Button>
           </div>
         </QuestionCard>
       )}

@@ -4,6 +4,7 @@ declare global {
   interface Window {
     SpeechRecognition: any;
     webkitSpeechRecognition: any;
+    simulateAsrInput: (text: string) => void;
   }
 }
 
@@ -11,131 +12,297 @@ export interface UseAsrOptions {
   lang?: string;
   onResult?: (text: string) => void;
   onEnd?: () => void;
+  maxDurationSeconds?: number;
 }
 
 export function useAsr() {
   const [isListening, setIsListening] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [status, setStatus] = useState<'idle' | 'listening' | 'error' | 'unsupported'>(() => {
-    return typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
-      ? 'idle'
-      : 'unsupported';
-  });
+  const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'error' | 'unsupported'>('idle');
   const [error, setError] = useState<string | null>(null);
 
   const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const timeoutRef = useRef<any>(null);
+
   const onResultCallbackRef = useRef<((text: string) => void) | undefined>(undefined);
   const onEndCallbackRef = useRef<(() => void) | undefined>(undefined);
+  const finalTranscriptRef = useRef<string>('');
+
+  const cleanupMedia = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch {
+        // ignore
+      }
+      recognitionRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    mediaRecorderRef.current = null;
+  }, []);
 
   const stopListening = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-      } catch (err) {
+      } catch {
         // ignore
       }
     }
-    setIsListening(false);
-    setStatus(prev => (prev === 'listening' ? 'idle' : prev));
-  }, []);
 
-  const startListening = useCallback((options?: UseAsrOptions) => {
-    const SpeechRecognition = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
-    if (!SpeechRecognition) {
-      setStatus('unsupported');
-      setError('Speech recognition is not supported in this browser.');
-      return;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {
+        cleanupMedia();
+        setIsListening(false);
+        setStatus('idle');
+      }
+    } else {
+      cleanupMedia();
+      setIsListening(false);
+      setStatus('idle');
     }
+  }, [cleanupMedia]);
 
-    if (isListening) {
-      stopListening();
-      return;
-    }
+  const startListening = useCallback(
+    async (options?: UseAsrOptions) => {
+      if (isListening || isProcessing) {
+        stopListening();
+        return;
+      }
 
-    setError(null);
-    setTranscript('');
-    onResultCallbackRef.current = options?.onResult;
-    onEndCallbackRef.current = options?.onEnd;
+      setError(null);
+      setTranscript('');
+      finalTranscriptRef.current = '';
+      audioChunksRef.current = [];
+      onResultCallbackRef.current = options?.onResult;
+      onEndCallbackRef.current = options?.onEnd;
 
-    try {
-      const recognition = new SpeechRecognition();
       const patientLang = localStorage.getItem('patient_language') || 'en';
       const requestedLang = options?.lang || (patientLang === 'hi' ? 'hi-IN' : 'en-IN');
-      
-      recognition.lang = requestedLang;
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
 
-      recognition.onstart = () => {
-        setIsListening(true);
-        setStatus('listening');
-      };
+      // 1. Acquire microphone stream
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+        setStatus('unsupported');
+        setError('Voice input is not supported in this browser.');
+        setIsListening(false);
+        return;
+      }
 
-      recognition.onresult = (event: any) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          } else {
-            interimTranscript += event.results[i][0].transcript;
-          }
-        }
-
-        const text = finalTranscript || interimTranscript;
-        setTranscript(text);
-
-        if (finalTranscript && onResultCallbackRef.current) {
-          onResultCallbackRef.current(finalTranscript);
-        }
-      };
-
-      recognition.onerror = (e: any) => {
-        console.warn('ASR error:', e.error);
-        setError(e.error || 'Microphone error');
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+        streamRef.current = stream;
+      } catch (err: any) {
+        console.warn('Microphone access failed:', err);
+        setError(err.message || 'Microphone access denied. Please check permissions.');
         setStatus('error');
         setIsListening(false);
-      };
+        return;
+      }
 
-      recognition.onend = () => {
-        setIsListening(false);
-        setStatus(prev => (prev === 'listening' ? 'idle' : prev));
-        if (onEndCallbackRef.current) {
-          onEndCallbackRef.current();
+      setIsListening(true);
+      setStatus('listening');
+
+      // 2. Setup MediaRecorder for robust backend AI transcription
+      let recorder: MediaRecorder | null = null;
+      try {
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : '';
+
+        recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+        mediaRecorderRef.current = recorder;
+
+        recorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        recorder.onstop = async () => {
+          setIsListening(false);
+
+          // If browser speech recognition already produced text, use it!
+          const existingText = finalTranscriptRef.current.trim();
+          if (existingText.length > 0) {
+            cleanupMedia();
+            setStatus('idle');
+            if (onResultCallbackRef.current) {
+              onResultCallbackRef.current(existingText);
+            }
+            if (onEndCallbackRef.current) {
+              onEndCallbackRef.current();
+            }
+            return;
+          }
+
+          // Otherwise, send recorded audio chunks to Sarvam AI / Gemini backend
+          if (audioChunksRef.current.length > 0) {
+            setIsProcessing(true);
+            setStatus('processing');
+
+            try {
+              const audioBlob = new Blob(audioChunksRef.current, {
+                type: recorder?.mimeType || 'audio/webm',
+              });
+
+              const formData = new FormData();
+              formData.append('file', audioBlob, 'speech.webm');
+              formData.append('language', requestedLang);
+
+              const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+              const response = await fetch(`${API_URL}/api/sarvam/asr`, {
+                method: 'POST',
+                body: formData,
+              });
+
+              if (response.ok) {
+                const data = await response.json();
+                if (data && data.transcript) {
+                  const cleaned = data.transcript.trim();
+                  setTranscript(cleaned);
+                  finalTranscriptRef.current = cleaned;
+                  if (onResultCallbackRef.current) {
+                    onResultCallbackRef.current(cleaned);
+                  }
+                }
+              } else {
+                console.warn('Backend ASR returned non-200 status:', response.status);
+              }
+            } catch (postErr) {
+              console.warn('Failed to send audio to backend ASR:', postErr);
+            } finally {
+              setIsProcessing(false);
+              setStatus('idle');
+            }
+          } else {
+            setStatus('idle');
+          }
+
+          cleanupMedia();
+          if (onEndCallbackRef.current) {
+            onEndCallbackRef.current();
+          }
+        };
+
+        recorder.start(250); // collect chunks every 250ms
+      } catch (recErr) {
+        console.warn('MediaRecorder setup error:', recErr);
+      }
+
+      // 3. Start WebSpeech API in parallel for instant client-side interim feedback
+      const SpeechRecognition =
+        typeof window !== 'undefined'
+          ? window.SpeechRecognition || window.webkitSpeechRecognition
+          : null;
+
+      if (SpeechRecognition) {
+        try {
+          const recognition = new SpeechRecognition();
+          recognition.lang = requestedLang;
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.maxAlternatives = 1;
+
+          recognition.onresult = (event: any) => {
+            let interim = '';
+            let final = '';
+
+            for (let i = 0; i < event.results.length; ++i) {
+              if (event.results[i].isFinal) {
+                final += event.results[i][0].transcript + ' ';
+              } else {
+                interim += event.results[i][0].transcript;
+              }
+            }
+
+            const currentText = (final + interim).trim();
+            if (currentText) {
+              setTranscript(currentText);
+              finalTranscriptRef.current = (final || currentText).trim();
+              if (onResultCallbackRef.current && final.trim()) {
+                onResultCallbackRef.current(final.trim());
+              }
+            }
+          };
+
+          recognition.onerror = (e: any) => {
+            console.warn('WebSpeech interim error (will rely on MediaRecorder/Sarvam):', e.error);
+          };
+
+          recognition.onend = () => {
+            // WebSpeech ended; MediaRecorder continues until user or timer stops it
+          };
+
+          recognitionRef.current = recognition;
+          recognition.start();
+        } catch (speechErr) {
+          console.warn('WebSpeech start error:', speechErr);
         }
-      };
+      }
 
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (err: any) {
-      console.error('Failed to start ASR:', err);
-      setError(err.message || 'Failed to start microphone');
-      setStatus('error');
-      setIsListening(false);
-    }
-  }, [isListening, stopListening]);
+      // 4. Auto-stop timer (default 8 seconds or custom maxDuration)
+      const duration = (options?.maxDurationSeconds || 8) * 1000;
+      timeoutRef.current = setTimeout(() => {
+        stopListening();
+      }, duration);
+    },
+    [isListening, isProcessing, stopListening, cleanupMedia]
+  );
 
   useEffect(() => {
     return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch (e) {
-          // ignore
-        }
-      }
+      cleanupMedia();
     };
+  }, [cleanupMedia]);
+
+  // Support test simulation
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.simulateAsrInput = (text: string) => {
+        setTranscript(text);
+        finalTranscriptRef.current = text;
+        if (onResultCallbackRef.current) {
+          onResultCallbackRef.current(text);
+        }
+      };
+    }
   }, []);
 
   return {
     isListening,
+    isProcessing,
     transcript,
     status,
     error,
     startListening,
     stopListening,
-    setTranscript
+    setTranscript,
   };
 }

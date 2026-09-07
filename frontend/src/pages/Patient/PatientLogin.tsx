@@ -3,22 +3,53 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/button';
 import { MandalaBackground } from '../../components/MandalaBackground';
 import { QuestionCard } from '../../components/QuestionCard';
+import { supabase } from '../../lib/supabase';
 
 export default function PatientLogin() {
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [abhaId, setAbhaId] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (abhaId.length !== 14) {
-      setError('Please enter a valid 14-digit ABHA ID.');
-      return;
+    setError('');
+    setLoading(true);
+
+    try {
+      if (isLogin) {
+        const { error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        if (authError) throw authError;
+        navigate('/patient/dashboard');
+      } else {
+        if (abhaId.length !== 14) {
+          throw new Error('Please enter a valid 14-digit ABHA ID.');
+        }
+        
+        const { error: authError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              abha_id: abhaId
+            }
+          }
+        });
+        
+        if (authError) throw authError;
+        navigate('/patient/dashboard');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
     }
-    
-    // For the hackathon, we simply store the ABHA ID in localStorage to represent the logged-in patient
-    localStorage.setItem('logged_in_abha_id', abhaId);
-    navigate('/patient/dashboard');
   };
 
   return (
@@ -26,38 +57,61 @@ export default function PatientLogin() {
       <MandalaBackground />
       
       <div className="w-full max-w-[768px] z-10">
-        <QuestionCard className="w-full text-center">
+        <QuestionCard className="w-full text-center p-8">
           <div className="mb-8">
              <h1 className="font-display text-4xl text-charcoal mb-2">Patient Portal</h1>
-             <h2 className="text-muted text-lg">Log in to view your medical history</h2>
+             <h2 className="text-muted text-lg">{isLogin ? 'Log in to view your medical history' : 'Register to access your health records'}</h2>
           </div>
           
-          <form onSubmit={handleLogin} className="space-y-6 max-w-sm mx-auto">
-            <div>
+          <form onSubmit={handleAuth} className="space-y-4 max-w-sm mx-auto">
+            <input 
+              type="email" 
+              placeholder="Email Address"
+              required
+              className="w-full text-center text-lg p-4 min-h-[56px] border-2 border-warmgray rounded-[12px] bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-primary font-body"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+            />
+            
+            <input 
+              type="password" 
+              placeholder="Password"
+              required
+              className="w-full text-center text-lg p-4 min-h-[56px] border-2 border-warmgray rounded-[12px] bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-primary font-body"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+            />
+
+            {!isLogin && (
               <input 
                 type="text" 
                 placeholder="14-digit ABHA ID"
-                className="w-full text-center text-2xl tracking-[0.2em] p-4 min-h-[56px] border-2 border-warmgray rounded-[12px] bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-body"
+                required
+                className="w-full text-center text-xl tracking-[0.2em] p-4 min-h-[56px] border-2 border-warmgray rounded-[12px] bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-primary font-body"
                 value={abhaId}
-                onChange={e => {
-                  setError('');
-                  setAbhaId(e.target.value.replace(/\D/g, '').slice(0, 14));
-                }}
+                onChange={e => setAbhaId(e.target.value.replace(/\D/g, '').slice(0, 14))}
               />
-              {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-            </div>
+            )}
+            
+            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
             
             <Button 
               type="submit"
-              className="w-full min-h-[56px] text-lg rounded-[12px] bg-primary hover:bg-primary/90 text-white font-body" 
-              disabled={abhaId.length < 14}
+              disabled={loading}
+              className="w-full min-h-[56px] text-lg rounded-[12px] bg-primary hover:bg-primary/90 text-white font-body mt-4" 
             >
-              Access Dashboard
+              {loading ? 'Processing...' : (isLogin ? 'Login' : 'Register')}
             </Button>
           </form>
           
           <div className="mt-8 pt-6 border-t border-warmgray/30 text-sm text-muted">
-            <p>Don't have an ABHA ID? Register at the kiosk to get started.</p>
+            <button 
+              type="button" 
+              onClick={() => { setIsLogin(!isLogin); setError(''); }}
+              className="text-primary hover:underline font-semibold"
+            >
+              {isLogin ? "Don't have an account? Register here" : "Already have an account? Log in"}
+            </button>
           </div>
         </QuestionCard>
       </div>

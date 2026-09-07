@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { get, set } from 'idb-keyval';
 import { MandalaBackground } from '../components/MandalaBackground';
@@ -49,6 +49,21 @@ export default function MedicalHistoryFlow() {
   const { speak, isPlaying } = useAudio();
   const { isListening, transcript, startListening, stopListening } = useAsr();
 
+  const baseMedicationsRef = useRef('');
+  const baseSurgeriesRef = useRef('');
+
+  const wasListeningRef = useRef(false);
+
+  useEffect(() => {
+    if (isListening && !wasListeningRef.current) {
+      if (step === 1) baseMedicationsRef.current = medications;
+      if (step === 3) baseSurgeriesRef.current = surgeries;
+      wasListeningRef.current = true;
+    } else if (!isListening) {
+      wasListeningRef.current = false;
+    }
+  }, [isListening, step, medications, surgeries]);
+
   const flushOfflineQueue = useCallback(async () => {
     const queue: OfflineMedicalHistory[] | undefined = await get(OFFLINE_MH_QUEUE_KEY);
     if (!queue || queue.length === 0) return;
@@ -95,24 +110,35 @@ export default function MedicalHistoryFlow() {
     if (!transcript) return;
     const lower = transcript.toLowerCase();
 
+    if (lower.includes('continue') || lower.includes('next') || lower.includes('finish') || lower.includes('submit') || lower.includes('आगे') || lower.includes('समाप्त')) {
+      const btn = document.getElementById('btn-medical-next');
+      if (btn && !(btn as HTMLButtonElement).disabled) {
+        btn.click();
+      }
+      return;
+    }
+
     if (step === 0) {
       // Allergies
       const allergyOptions = ['Penicillin', 'Sulfa drugs', 'Peanuts', 'Dust/Pollen', 'None', 'Other'];
       if (lower.includes('no') || lower.includes('none') || lower.includes('कोई नहीं') || lower.includes('नही')) {
+        // eslint-disable-next-line
         setAllergies(['None']);
       } else {
         allergyOptions.forEach(item => {
           if (lower.includes(item.toLowerCase().split('/')[0].split(' ')[0])) {
+            // eslint-disable-next-line
             toggleSelection(item, allergies, setAllergies);
           }
         });
       }
     } else if (step === 1) {
       // Medications - dictate text
-      setMedications(prev => (prev ? prev + ', ' + transcript : transcript));
+      const base = baseMedicationsRef.current;
+      const newMeds = base ? base + (base.endsWith(', ') || base.endsWith(',') ? ' ' : ', ') + transcript : transcript;
+      setMedications(newMeds);
     } else if (step === 2) {
       // Conditions
-      const condOptions = ['Diabetes', 'Hypertension (High BP)', 'Asthma', 'Thyroid', 'Heart Disease', 'None', 'Other'];
       if (lower.includes('no') || lower.includes('none') || lower.includes('कोई नहीं') || lower.includes('नही')) {
         setConditions(['None']);
       } else if (lower.includes('sugar') || lower.includes('मधुमेह') || lower.includes('diabetes')) {
@@ -128,8 +154,11 @@ export default function MedicalHistoryFlow() {
       }
     } else if (step === 3) {
       // Surgeries - dictate text
-      setSurgeries(prev => (prev ? prev + ', ' + transcript : transcript));
+      const base = baseSurgeriesRef.current;
+      const newSurgs = base ? base + (base.endsWith(', ') || base.endsWith(',') ? ' ' : ', ') + transcript : transcript;
+      setSurgeries(newSurgs);
     }
+    // eslint-disable-next-line
   }, [transcript, step]);
 
   const toggleSelection = (item: string, list: string[], setList: React.Dispatch<React.SetStateAction<string[]>>) => {
@@ -389,7 +418,7 @@ export default function MedicalHistoryFlow() {
                 onClick={() => (isListening ? stopListening() : startListening({ lang: session?.language === 'hi' ? 'hi-IN' : 'en-IN' }))}
                 className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-md ${
                   isListening 
-                    ? 'bg-danger text-white animate-pulse scale-110' 
+                    ? 'bg-primary text-white scale-105 ring-2 ring-primary/40' 
                     : 'bg-primary text-white hover:bg-primary/90'
                 }`}
                 title="Speak your answer"
@@ -409,6 +438,7 @@ export default function MedicalHistoryFlow() {
           </div>
           
           <Button
+            id="btn-medical-next"
             onClick={handleNext}
             disabled={isNextDisabled() || isSubmitting}
             className="mt-6 w-full min-h-[58px] text-lg rounded-[12px] bg-primary text-white font-body focus:outline-none focus:ring-2 focus:ring-primary hover:bg-primary/90 transition-colors shadow-xs"

@@ -1,39 +1,62 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Clock, FileJson, Calendar, LogOut, ChevronRight } from 'lucide-react';
+import { Activity, FileJson, Calendar, LogOut } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { MandalaBackground } from '../../components/MandalaBackground';
 import { API_URL } from '@/lib/api';
+import { supabase } from '../../lib/supabase';
 
 export default function PatientDashboard() {
   const [visits, setVisits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [abhaId, setAbhaId] = useState<string | null>(null);
   const navigate = useNavigate();
-  const abhaId = localStorage.getItem('logged_in_abha_id');
 
   useEffect(() => {
-    if (!abhaId) {
-      navigate('/patient/login');
-      return;
-    }
+    let mounted = true;
 
-    const fetchVisits = async () => {
+    const checkAuth = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/patient/visits/${abhaId}`);
-        const data = await res.json();
-        setVisits(data.data || []);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          if (mounted) navigate('/patient/login');
+          return;
+        }
+
+        const id = session.user?.user_metadata?.abha_id;
+        if (id && mounted) {
+          setAbhaId(id);
+          fetchVisits(id);
+        } else if (mounted) {
+          navigate('/patient/login');
+        }
       } catch (err) {
-        console.error('Failed to fetch visits:', err);
-      } finally {
-        setLoading(false);
+        console.error('Auth check failed:', err);
+        if (mounted) navigate('/patient/login');
       }
     };
 
-    fetchVisits();
-  }, [abhaId, navigate]);
+    const fetchVisits = async (id: string) => {
+      try {
+        const res = await fetch(`${API_URL}/api/patient/visits/${id}`);
+        const data = await res.json();
+        if (mounted) setVisits(data.data || []);
+      } catch (err) {
+        console.error('Failed to fetch visits:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
 
-  const handleLogout = () => {
-    localStorage.removeItem('logged_in_abha_id');
+    checkAuth();
+    
+    return () => {
+      mounted = false;
+    };
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     navigate('/patient/login');
   };
 

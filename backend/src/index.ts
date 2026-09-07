@@ -11,7 +11,7 @@ const port = process.env.PORT || 3001;
 
 const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map((url) => url.trim().replace(/\/$/, ''))
-  : ['http://localhost:5173', 'http://localhost:3000'];
+  : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174', 'http://localhost:5175'];
 
 app.use(
   cors({
@@ -137,36 +137,73 @@ app.post('/auth/login', (req: Request, res: Response) => {
   return res.status(401).json({ error: 'Invalid credentials. Use doctor@demo.com / demo123' });
 });
 
-app.post('/match-voice', async (req: Request, res: Response) => {
+const handleVoiceMatch = async (req: Request, res: Response) => {
   const { text, options } = req.body;
   if (!text || !options || !Array.isArray(options)) {
     return res.status(400).json({ error: 'Missing text or options' });
   }
 
-  try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const prompt = `You are matching a patient's spoken answer to a predefined list of options.
+  const cleanText = text.toLowerCase().trim();
+
+  // 1. Fast direct keyword / substring matching
+  for (const opt of options) {
+    const val = (opt.value || '').toLowerCase();
+    const lbl = (opt.label || '').toLowerCase();
+    const hi = (opt.label_hi || '').toLowerCase();
+    if (cleanText === val || cleanText === lbl || (hi && cleanText === hi)) {
+      return res.json({ match: opt.value });
+    }
+    if (cleanText.includes(lbl) || (hi && cleanText.includes(hi))) {
+      return res.json({ match: opt.value });
+    }
+  }
+
+  // 2. Common affirmative / negative colloquial words (English + Hindi)
+  const affirmatives = ['haan', 'yes', 'yeah', 'yep', 'yup', 'bilkul haan', 'bilkul sahi', 'true', 'sahi', 'sahi hai', 'ha', 'हाँ', 'जी हाँ', 'जी'];
+  const negatives = ['nahi', 'no', 'nah', 'nope', 'false', 'galat', 'na', 'नहीं', 'जी नहीं', 'बिल्कुल नहीं'];
+
+  const hasAffirmative = affirmatives.some((w) => cleanText.includes(w));
+  const hasNegative = negatives.some((w) => cleanText.includes(w));
+
+  if (hasAffirmative && !hasNegative) {
+    const yesOpt = options.find((o: any) => o.value === 'yes' || o.value === 'true' || o.value === '1' || (o.label && o.label.toLowerCase() === 'yes'));
+    if (yesOpt) return res.json({ match: yesOpt.value });
+  } else if (hasNegative && !hasAffirmative) {
+    const noOpt = options.find((o: any) => o.value === 'no' || o.value === 'false' || o.value === '0' || (o.label && o.label.toLowerCase() === 'no'));
+    if (noOpt) return res.json({ match: noOpt.value });
+  }
+
+  // 3. Fallback to Gemini if API key configured
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const prompt = `You are matching a patient's spoken answer to a predefined list of options.
 Patient's answer: "${text}"
 
 Available Options:
-${options.map((o: any) => `- ${o.value}: ${o.label}`).join('\n')}
+${options.map((o: any) => `- ${o.value}: ${o.label}${o.label_hi ? ` / ${o.label_hi}` : ''}`).join('\n')}
 
 Select the most semantically matching option 'value'. If none match even remotely, reply with "NULL".
 Reply ONLY with the exact option value string or "NULL". Do not include quotes or markdown.`;
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text().trim();
-    if (responseText === 'NULL') {
-      return res.json({ match: null });
+      const result = await model.generateContent(prompt);
+      const responseText = result.response.text().trim();
+      if (responseText !== 'NULL') {
+        const matchedOption = options.find((o: any) => o.value === responseText);
+        if (matchedOption) {
+          return res.json({ match: matchedOption.value });
+        }
+      }
+    } catch (err) {
+      console.warn('Gemini Voice Match Error (fallback to null):', err);
     }
-    
-    const matchedOption = options.find((o: any) => o.value === responseText);
-    return res.json({ match: matchedOption ? matchedOption.value : null });
-  } catch (err) {
-    console.error('Gemini Voice Match Error:', err);
-    return res.status(500).json({ error: 'Failed to match voice' });
   }
-});
+
+  return res.json({ match: null });
+};
+
+app.post('/match-voice', handleVoiceMatch);
+app.post('/api/match-voice', handleVoiceMatch);
 
 // OCR Vision endpoint with real Sarvam Document Parsing and safe fallback
 app.post('/ocr-vision', async (req: Request, res: Response) => {
@@ -468,34 +505,81 @@ app.post('/api/sarvam/tts', async (req: Request, res: Response) => {
   }
 });
 
-// Real Sarvam ASR Endpoint
+// Multilingual ASR Endpoint with Sarvam AI and Gemini Audio Fallback
 app.post('/api/sarvam/asr', upload.single('file'), async (req: Request, res: Response) => {
-  if (!process.env.SARVAM_API_KEY || !req.file) {
-    return res.status(501).json({ error: 'Sarvam ASR not implemented or no file.' });
+  if (!req.file) {
+    return res.status(400).json({ error: 'No audio file provided' });
   }
-  try {
-    const form = new FormData();
-    form.append('file', req.file.buffer, { filename: 'audio.webm', contentType: 'audio/webm' });
-    form.append('model', 'saaras:v1');
-    form.append('prompt', '');
 
-    const response = await fetch('https://api.sarvam.ai/speech-to-text-translate', {
-      method: 'POST',
-      headers: {
-        'api-subscription-key': process.env.SARVAM_API_KEY,
-        ...form.getHeaders()
-      },
-      body: form as any
-    });
-    const data: any = await response.json();
-    if (data.transcript) {
-      return res.json({ transcript: data.transcript });
+  const requestedLang = String(req.body.language || req.query.language || 'unknown').toLowerCase();
+  let langCode = 'unknown';
+  if (requestedLang.startsWith('hi')) langCode = 'hi-IN';
+  else if (requestedLang.startsWith('en')) langCode = 'en-IN';
+  else if (requestedLang.startsWith('ta')) langCode = 'ta-IN';
+  else if (requestedLang.startsWith('te')) langCode = 'te-IN';
+  else if (requestedLang.startsWith('bn')) langCode = 'bn-IN';
+  else langCode = requestedLang;
+
+  // 1. Try Sarvam AI Speech-to-Text (saaras:v3)
+  if (process.env.SARVAM_API_KEY) {
+    try {
+      const form = new FormData();
+      form.append('file', req.file.buffer, {
+        filename: req.file.originalname || 'audio.webm',
+        contentType: req.file.mimetype || 'audio/webm'
+      });
+      form.append('model', 'saaras:v3');
+      form.append('language_code', langCode);
+
+      const response = await fetch('https://api.sarvam.ai/speech-to-text', {
+        method: 'POST',
+        headers: {
+          'api-subscription-key': process.env.SARVAM_API_KEY,
+          ...form.getHeaders()
+        },
+        body: form as any
+      });
+      const data: any = await response.json();
+      if (data && data.transcript && typeof data.transcript === 'string') {
+        return res.json({ transcript: data.transcript.trim(), provider: 'sarvam' });
+      }
+      console.warn('Sarvam ASR did not return transcript, payload:', data);
+    } catch (sarvamErr) {
+      console.warn('Sarvam ASR error:', sarvamErr);
     }
-    return res.status(500).json({ error: 'No transcript returned' });
-  } catch (err) {
-    console.error('Sarvam ASR Error:', err);
-    return res.status(500).json({ error: 'Failed to transcribe ASR' });
   }
+
+  // 2. Fallback to Gemini 1.5 Flash Multimodal Audio Transcription
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const mimeType = req.file.mimetype || 'audio/webm';
+      const base64Audio = req.file.buffer.toString('base64');
+      const langHint = langCode === 'hi-IN' ? 'in Hindi (or English if mixed)' : 'in English or Hindi';
+      const prompt = `Listen carefully to this audio and transcribe exactly what the speaker says ${langHint}.
+If the speaker is saying numbers or digits (like an ID or phone number), write the numbers out clearly.
+If the speaker is choosing a language or option, write the option name.
+Output ONLY the raw transcribed text with NO conversational filler or markdown.`;
+
+      const result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            mimeType,
+            data: base64Audio
+          }
+        }
+      ]);
+      const geminiText = result.response.text().trim();
+      if (geminiText) {
+        return res.json({ transcript: geminiText, provider: 'gemini' });
+      }
+    } catch (geminiErr) {
+      console.error('Gemini ASR fallback error:', geminiErr);
+    }
+  }
+
+  return res.status(500).json({ error: 'ASR processing failed. Please type or select manually.' });
 });
 
 // Real Sarvam OCR Endpoint

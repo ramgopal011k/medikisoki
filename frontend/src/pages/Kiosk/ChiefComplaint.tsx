@@ -1,17 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Volume2, VolumeX, Mic } from 'lucide-react';
+import { Volume2, VolumeX, Mic, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAudio } from '../../hooks/useAudio';
 import { MandalaBackground } from '../../components/MandalaBackground';
 import { API_URL } from '@/lib/api';
-
-declare global {
-  interface Window {
-    SpeechRecognition: any;
-    webkitSpeechRecognition: any;
-  }
-}
+import { useAsr } from '@/hooks/useAsr';
 
 const complaintsMap: Record<string, string> = {
   'Fever': 'fever',
@@ -27,49 +21,27 @@ const complaints = Object.keys(complaintsMap);
 export default function ChiefComplaint() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState('');
   const { speak, isPlaying } = useAudio();
+  const { isListening, isProcessing, transcript, startListening, stopListening } = useAsr();
 
-  const startListening = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Microphone/ASR is not supported in this browser. Please type or select manually.");
-      return;
+  const handleVoiceInput = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      const patientLang = localStorage.getItem('patient_language') || 'en';
+      startListening({
+        lang: patientLang === 'hi' ? 'hi-IN' : 'en-IN',
+        onResult: (text) => {
+          const lower = text.toLowerCase();
+          if (lower.includes('fever') || lower.includes('बुखार')) handleSelect('Fever');
+          else if (lower.includes('chest') || lower.includes('pain') || lower.includes('छाती')) handleSelect('Chest Pain');
+          else if (lower.includes('head') || lower.includes('सिर')) handleSelect('Headache');
+          else if (lower.includes('stomach') || lower.includes('abdomen') || lower.includes('पेट')) handleSelect('Stomach Pain');
+          else if (lower.includes('cough') || lower.includes('खांसी')) handleSelect('Cough');
+          else handleSelect('Other');
+        }
+      });
     }
-    
-    const recognition = new SpeechRecognition();
-    recognition.lang = localStorage.getItem('patient_language') === 'hi' ? 'hi-IN' : 'en-IN';
-    recognition.interimResults = false;
-    
-    recognition.onstart = () => {
-      setIsListening(true);
-      setTranscript('');
-    };
-    
-    recognition.onresult = (event: any) => {
-      const text = event.results[0][0].transcript.toLowerCase();
-      setTranscript(text);
-      
-      // Basic ASR matching to complaint
-      if (text.includes('fever') || text.includes('बुखार')) handleSelect('Fever');
-      else if (text.includes('chest') || text.includes('pain') || text.includes('छाती')) handleSelect('Chest Pain');
-      else if (text.includes('head') || text.includes('सिर')) handleSelect('Headache');
-      else if (text.includes('stomach') || text.includes('पेट')) handleSelect('Stomach Pain');
-      else if (text.includes('cough') || text.includes('खांसी')) handleSelect('Cough');
-      else handleSelect('Other');
-    };
-    
-    recognition.onerror = (e: any) => {
-      console.error(e);
-      setIsListening(false);
-    };
-    
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-    
-    recognition.start();
   };
 
   const handleSelect = async (complaintLabel: string) => {
@@ -81,7 +53,7 @@ export default function ChiefComplaint() {
       
       // If we don't have a session, create one
       if (!localStorage.getItem('patient_session')) {
-        const { data, error } = await supabase.from('sessions').upsert({
+        const { error } = await supabase.from('sessions').upsert({
           id: sessionId,
           hospital_id: '11111111-1111-1111-1111-111111111111',
           status: 'active'
@@ -177,19 +149,24 @@ export default function ChiefComplaint() {
               <div className="w-full flex flex-col items-center border-t border-[#e5e0d8] pt-6">
                 <p className="text-sm font-medium text-muted mb-3">Or speak your complaint (ASR):</p>
                 <button
-                  onClick={startListening}
-                  disabled={isListening}
+                  onClick={handleVoiceInput}
+                  disabled={isProcessing}
                   className={`w-14 h-14 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-300 ${
                     isListening
-                      ? 'bg-red-500 animate-pulse scale-110'
+                      ? 'bg-[#8c7355] scale-105 ring-2 ring-[#8c7355]/40'
+                      : isProcessing
+                      ? 'bg-amber-600'
                       : 'bg-[#8c7355] hover:bg-[#786146]'
                   }`}
-                  title="Speak your complaint"
+                  title={isListening ? "Listening... Click to finish" : "Speak your complaint"}
                 >
-                  <Mic className="w-6 h-6" />
+                  {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <Mic className="w-6 h-6" />}
                 </button>
+                <p className="text-xs text-muted mt-2">
+                  {isProcessing ? 'Processing audio...' : isListening ? 'Listening (tap to finish)...' : 'Tap to speak'}
+                </p>
                 {transcript && (
-                  <p className="mt-3 text-primary font-semibold italic text-base">
+                  <p className="mt-2 text-primary font-semibold italic text-base">
                     "{transcript}"
                   </p>
                 )}

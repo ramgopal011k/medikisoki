@@ -13,12 +13,9 @@ import {
   Copy, 
   Check, 
   RefreshCw, 
-  ShieldCheck, 
   Flower2, 
   Stethoscope, 
-  ArrowLeft,
   Activity,
-  Layers,
   Sparkles,
   X
 } from 'lucide-react';
@@ -84,6 +81,7 @@ export default function AdminHospitals() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line
     fetchHospitals();
   }, [fetchHospitals]);
 

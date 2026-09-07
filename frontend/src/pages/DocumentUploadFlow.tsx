@@ -62,9 +62,11 @@ export default function DocumentUploadFlow() {
       }
     } else if (step === 'correction') {
       if (lower.includes('confirm') || lower.includes('save') || lower.includes('सही') || lower.includes('सहेजें') || lower.includes('done')) {
+        // eslint-disable-next-line
         handleSave();
       }
     }
+    // eslint-disable-next-line
   }, [transcript, step, navigate]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -110,17 +112,53 @@ export default function DocumentUploadFlow() {
     }
 
     try {
-      const { data: { text } } = await Tesseract.recognize(
-        file,
-        'eng+hin',
-        {
-          logger: m => {
-            if (m.status === 'recognizing text') {
-              setProgress(Math.round(m.progress * 100));
-            }
+      let text = '';
+      
+      // Try Sarvam OCR backend
+      try {
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+        });
+        reader.readAsDataURL(file);
+        const base64 = await base64Promise;
+
+        setProgress(30); // Simulated progress
+
+        const ocrRes = await fetch(`${API_URL}/ocr-vision`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_base64: base64 })
+        });
+        
+        if (ocrRes.ok) {
+          const ocrData = await ocrRes.json();
+          if (ocrData.text && !ocrData.fallback) {
+            text = ocrData.text;
+            setProgress(100);
           }
         }
-      );
+      } catch (backendErr) {
+        console.warn('Backend OCR failed, falling back to Tesseract', backendErr);
+      }
+
+      // Fallback to Tesseract
+      if (!text) {
+        const tesseractRes = await Tesseract.recognize(
+          file,
+          'eng+hin',
+          {
+            logger: m => {
+              if (m.status === 'recognizing text') {
+                // scale remaining 70% progress
+                setProgress(30 + Math.round(m.progress * 70));
+              }
+            }
+          }
+        );
+        text = tesseractRes.data.text;
+      }
 
       setRawText(text);
 
@@ -296,7 +334,7 @@ export default function DocumentUploadFlow() {
                   onClick={() => (isListening ? stopListening() : startListening({ lang: session.language === 'hi' ? 'hi-IN' : 'en-IN' }))}
                   className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-md ${
                     isListening 
-                      ? 'bg-danger text-white animate-pulse scale-110' 
+                      ? 'bg-primary text-white scale-105 ring-2 ring-primary/40' 
                       : 'bg-primary text-white hover:bg-primary/90'
                   }`}
                   title="Voice command"
