@@ -142,5 +142,16 @@ export async function generateFhirBundle(sessionId: string) {
     }
   });
 
+  // Log consent to consent_logs table
+  try {
+    await supabase.from('consent_logs').insert({
+      session_id: sessionData.id,
+      patient_id: patientId,
+      consent_status: 'granted'
+    });
+  } catch (err) {
+    console.warn('Failed to log consent:', err);
+  }
+
   return bundle;
 }

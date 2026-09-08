@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ProvenanceBadge } from '@/components/ProvenanceBadge';
-import { ArrowLeft, Check, AlertTriangle, ShieldCheck, Edit2, Save, X, ChevronDown, ChevronUp, Sparkles, BrainCircuit, Calendar, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Check, AlertTriangle, ShieldCheck, Edit2, Save, X, ChevronDown, ChevronUp, Sparkles, BrainCircuit, Calendar, ExternalLink, Trash2 } from 'lucide-react';
 import { API_URL } from '@/lib/api';
 
 interface Session {
@@ -50,6 +50,7 @@ interface ExtractedField {
   extraction_id: string;
   field_name: string;
   field_value: string;
+  confidence: number;
   document_id?: string;
 }
 
@@ -246,6 +247,19 @@ export default function TriageSummary() {
     }
   };
 
+  const handleRejectFact = async (factId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/history-facts/${factId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setFacts(prev => prev.filter(f => f.fact_id !== factId));
+      }
+    } catch (err) {
+      console.error('Failed to reject fact', err);
+    }
+  };
+
   const [doctorNotes, setDoctorNotes] = useState('');
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
@@ -312,7 +326,8 @@ export default function TriageSummary() {
                {new Date(session.created_at).toLocaleDateString()} {new Date(session.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
              </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
+             <div><p className="text-sm text-muted mb-1">Queue Token</p><p className="font-semibold text-primary text-xl font-display tracking-widest">T-{session.session_id.substring(0,4).toUpperCase()}</p></div>
              <div><p className="text-sm text-muted mb-1">Aadhaar / ABHA</p><p className="font-semibold text-charcoal text-lg">xxxx-xxxx-{session.dummy_aadhaar ? session.dummy_aadhaar.slice(-4) : '0000'}</p></div>
              <div><p className="text-sm text-muted mb-1">Preferred Language</p><p className="font-semibold text-charcoal text-lg">{session.language === 'hi' ? 'Hindi' : 'English'}</p></div>
              <div><p className="text-sm text-muted mb-1">Status</p><p className="font-semibold text-success flex items-center gap-1 text-lg"><ShieldCheck className="w-5 h-5" /> Pending Triage</p></div>
@@ -496,14 +511,24 @@ export default function TriageSummary() {
                            <Check className="w-3.5 h-3.5" /> Verified
                          </span>
                       ) : (
-                         <Button 
-                           variant="outline" size="sm" 
-                           className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/10"
-                           onClick={() => handleVerifyFact(fact.fact_id)}
-                           disabled={verifyingFactId === fact.fact_id}
-                         >
-                           {verifyingFactId === fact.fact_id ? 'Verifying...' : 'Verify'}
-                         </Button>
+                         <div className="flex items-center gap-2">
+                           <Button 
+                             variant="outline" size="sm" 
+                             className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/10"
+                             onClick={() => handleVerifyFact(fact.fact_id)}
+                             disabled={verifyingFactId === fact.fact_id}
+                           >
+                             {verifyingFactId === fact.fact_id ? 'Verifying...' : 'Verify'}
+                           </Button>
+                           <Button 
+                             variant="outline" size="sm" 
+                             className="h-7 w-7 p-0 text-danger border-danger/20 hover:bg-danger/10"
+                             onClick={() => handleRejectFact(fact.fact_id)}
+                             title="Reject Information"
+                           >
+                             <Trash2 className="w-3.5 h-3.5" />
+                           </Button>
+                         </div>
                       )}
                     </div>
                   </div>
@@ -654,19 +679,28 @@ export default function TriageSummary() {
             <p className="text-muted italic">No data extracted from documents.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {extractions.map(ext => (
+              {extractions.map(ext => {
+                const doc = documents.find(d => d.document_id === ext.document_id || (d as any).id === ext.document_id);
+                return (
                 <div key={ext.extraction_id} className={`bg-sand/50 p-4 rounded-xl border transition-all ${ext.confidence < 0.7 ? 'border-warning shadow-[0_0_8px_rgba(234,179,8,0.3)]' : 'border-warmgray'}`}>
                   <div className="flex justify-between items-start mb-1">
                     <p className="text-xs font-semibold text-muted uppercase tracking-wider">{ext.field_name}</p>
-                    {ext.confidence < 0.7 && (
-                      <span className="text-[10px] bg-warning/20 text-warning-foreground border border-warning/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" /> Low Confidence
-                      </span>
-                    )}
+                    <div className="flex gap-2 items-center">
+                      {ext.confidence < 0.7 && (
+                        <span className="text-[10px] bg-warning/20 text-warning-foreground border border-warning/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" /> Low Confidence
+                        </span>
+                      )}
+                      {doc?.file_url && (
+                        <a href={doc.file_url} target="_blank" rel="noreferrer" title="View Source Document" className="text-primary hover:text-primary/80 transition-colors">
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
                   </div>
                   <p className="text-charcoal font-medium">{ext.field_value || '—'}</p>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </CollapsibleSection>

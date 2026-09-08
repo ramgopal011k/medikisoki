@@ -399,6 +399,10 @@ export default function DoctorDashboard() {
                     {/* Information Rows */}
                     <div className="space-y-2.5 text-sm my-4 bg-sand/40 p-3.5 rounded-xl border border-warmgray/50">
                       <div className="flex justify-between items-center">
+                        <span className="text-muted text-xs uppercase font-semibold">Queue Token</span>
+                        <span className="font-semibold text-primary font-display tracking-widest text-base">T-{p.session_id.substring(0,4).toUpperCase()}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
                         <span className="text-muted text-xs uppercase font-semibold">Chief Complaint</span>
                         <span className="font-semibold text-charcoal">{p.chief_complaint}</span>
                       </div>

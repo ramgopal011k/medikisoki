@@ -467,6 +467,17 @@ app.patch('/history-facts/:id', async (req: Request, res: Response) => {
   }
 });
 
+app.delete('/history-facts/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    await supabase.from('answers').delete().eq('id', id);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Delete history fact error:', err);
+    res.status(500).json({ error: 'Failed to delete' });
+  }
+});
+
 // Ayush Assessment Endpoint
 app.post('/ayush-assessment', async (req: Request, res: Response) => {
   const { session_id, dimension, value } = req.body;

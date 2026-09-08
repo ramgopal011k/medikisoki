@@ -93,7 +93,9 @@ router.post('/extractions', async (req: any, res: any) => {
   }
 
   try {
-    const formatted = extractions.map((e: any) => ({
+    let formatted = extractions
+      .filter((e: any) => e.field_name !== 'Medications')
+      .map((e: any) => ({
       document_id: document_id || null, // allow null if just session answers
       field_name: e.field_name,
       field_value: e.field_value,
@@ -124,6 +126,65 @@ router.post('/extractions', async (req: any, res: any) => {
         verified: false
       });
     }
+
+    // Split Medications into Medication, Dosage, Frequency
+    for (const e of extractions) {
+      if (e.field_name === 'Medications' && e.field_value) {
+        const meds = e.field_value.split(/,/);
+        meds.forEach((medStr: string, idx: number) => {
+          const medText = medStr.trim();
+          if (!medText) return;
+          
+          const dosageMatch = medText.match(/\b(\d+(?:\.\d+)?\s*(?:mg|ml|g|mcg|units))\b/i);
+          const freqMatch = medText.match(/\b(BID|TDS|OD|QID|\d-\d-\d(?:-\d)?)\b/i);
+
+          let medName = medText;
+          let dosage = dosageMatch ? dosageMatch[0] : '';
+          let frequency = freqMatch ? freqMatch[0] : '';
+
+          if (dosage && dosageMatch) medName = medName.replace(dosageMatch[0], '').trim();
+          if (frequency && freqMatch) medName = medName.replace(freqMatch[0], '').trim();
+          medName = medName.replace(/^[,\s]+|[,\s]+$/g, '').trim();
+
+          const suffix = meds.length > 1 ? ` ${idx + 1}` : '';
+          
+          if (medName) {
+            formatted.push({
+              document_id,
+              field_name: `Medication Name${suffix}`,
+              field_value: medName,
+              confidence: e.confidence,
+              raw_text: medText,
+              provenance: 'ocr_extracted',
+              verified: false
+            });
+          }
+          if (dosage) {
+            formatted.push({
+              document_id,
+              field_name: `Dosage${suffix}`,
+              field_value: dosage,
+              confidence: e.confidence,
+              raw_text: medText,
+              provenance: 'ocr_extracted',
+              verified: false
+            });
+          }
+          if (frequency) {
+            formatted.push({
+              document_id,
+              field_name: `Frequency${suffix}`,
+              field_value: frequency,
+              confidence: e.confidence,
+              raw_text: medText,
+              provenance: 'ocr_extracted',
+              verified: false
+            });
+          }
+        });
+      }
+    }
+
 
     // Insert into ocr_extractions table (if it exists) or answers table
     const { error } = await supabase.from('ocr_extractions').insert(formatted);
