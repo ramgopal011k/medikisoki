@@ -36,6 +36,21 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
   const [selectedMulti, setSelectedMulti] = useState<string[]>([]);
   const pendingMatchRef = useRef<{ value: string; label: string } | null>(null);
 
+  const augmentedOptions = React.useMemo(() => {
+    if (!question.options) return undefined;
+    if (question.type !== 'single_choice' && question.type !== 'multi_choice') return question.options;
+    
+    const hasUnknown = question.options.some(o => 
+      o.value === 'unknown' || 
+      o.value === 'none' || 
+      o.label.toLowerCase().includes("don't know") ||
+      o.label.toLowerCase().includes('not sure')
+    );
+    
+    if (hasUnknown) return question.options;
+    return [...question.options, { value: 'unknown', label: "I don't know / Not sure", label_hi: 'मुझे नहीं पता' }];
+  }, [question.options, question.type]);
+
 
   const handleOptionTap = useCallback((value: string, label: string) => {
     if (question.type === 'single_choice') {
@@ -51,13 +66,13 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
 
   const submitMultiChoice = useCallback(() => {
     if (selectedMulti.length > 0) {
-      const labels = question.options
+      const labels = augmentedOptions
         ?.filter(opt => selectedMulti.includes(opt.value))
         .map(opt => language === 'hi' && opt.label_hi ? opt.label_hi : opt.label)
         .join(', ') || '';
       onAnswer(selectedMulti, labels);
     }
-  }, [selectedMulti, question.options, language, onAnswer]);
+  }, [selectedMulti, augmentedOptions, language, onAnswer]);
 
   // Process voice transcript match via a callback
   const processTranscriptMatch = useCallback(async () => {
@@ -69,7 +84,7 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
       return;
     }
 
-    if (!question.options) return;
+    if (!augmentedOptions) return;
 
     const lowerTranscript = transcript.toLowerCase().trim();
 
@@ -83,7 +98,7 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
       }
     }
 
-    const match = question.options.find(opt =>
+    const match = augmentedOptions.find(opt =>
       lowerTranscript.includes(opt.label.toLowerCase()) ||
       (opt.label_hi && lowerTranscript.includes(opt.label_hi.toLowerCase()))
     );
@@ -96,11 +111,11 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
         const res = await fetch(`${API_URL}/match-voice`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: transcript, options: question.options })
+          body: JSON.stringify({ text: transcript, options: augmentedOptions })
         });
         const data = await res.json();
         if (data.match) {
-          const geminiMatch = question.options.find(opt => opt.value === data.match);
+          const geminiMatch = augmentedOptions.find(opt => opt.value === data.match);
           if (geminiMatch) {
             pendingMatchRef.current = { value: geminiMatch.value, label: geminiMatch.label };
           }
@@ -150,7 +165,7 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
     if (question.type === 'single_choice' || question.type === 'multi_choice') {
       return (
         <div className="flex flex-col gap-4 w-full mt-8">
-          {question.options?.map((opt) => {
+          {augmentedOptions?.map((opt) => {
             const isSelected = selectedMulti.includes(opt.value);
             return (
               <button

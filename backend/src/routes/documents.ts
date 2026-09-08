@@ -103,6 +103,28 @@ router.post('/extractions', async (req: any, res: any) => {
       verified: false
     }));
 
+    // Extract potential date for Medical Timeline
+    let foundDate = null;
+    const dateRegex = /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2},? \d{4})\b/i;
+    for (const e of extractions) {
+      const match = (e.field_value || '').match(dateRegex) || (e.raw_text || '').match(dateRegex);
+      if (match) {
+        foundDate = match[0];
+        break;
+      }
+    }
+    if (foundDate && document_id) {
+      formatted.push({
+        document_id,
+        field_name: 'document_date',
+        field_value: foundDate,
+        confidence: 0.8,
+        raw_text: foundDate,
+        provenance: 'ocr_extracted',
+        verified: false
+      });
+    }
+
     // Insert into ocr_extractions table (if it exists) or answers table
     const { error } = await supabase.from('ocr_extractions').insert(formatted);
     if (error) {

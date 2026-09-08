@@ -38,3 +38,10 @@
 - **Batched Endpoints Restored**: Re-implemented `POST /ocr-extractions` and `POST /medical-history` to accept batched arrays to support the local frontend fixes that passed them in bulk.
 - **Supabase Realtime Subscriptions**: Removed local `setInterval` polling in favor of cleaner native Supabase Realtime subscriptions in `DoctorDashboard.tsx` (for session list) and `InterviewFlow.tsx` (for red flags).
 - **Mocked Tests**: Updated frontend integration tests to use `vi.stubGlobal('fetch', ...)` to mock the new Supabase-backed API responses so that tests can successfully run without `.env` credentials in non-production environments. All 48 tests pass.
+
+### Final Polish 5 Fixes
+- **Fix 1 (Sarvam OCR)**: Modified `DocumentUploadFlow.tsx` to read the image as base64 and hit the backend `/ocr-vision` endpoint first, using Tesseract.js only as a fallback if the backend OCR fails.
+- **Fix 2 (Reconciliation Engine)**: Added logic to `TriageSummary.tsx` to compare OCR extractions against medical history and patient facts, displaying any conflicts visually in the UI for the doctor to resolve.
+- **Fix 3 (AYUSH Completeness)**: Added 6 missing Dashavidha Pariksha dimensions (Sara, Samhanana, Pramana, Satmya, Vyayama Shakti, Vaya) to `AyushFlow.tsx` completing the 12-dimension set.
+- **Fix 4 (Completeness Engine)**: Added completeness scoring and missing-field detection to `backend/src/summary.ts` which assigns scores based on Chief Complaint, HPI, Medical History, Allergies, and AYUSH Assessment completion, then rendered this dynamically in `TriageSummary.tsx`.
+- **Fix 5 (Red-Flag Acknowledge)**: Added a "Acknowledge and Clear Flags" button to the Red Flags section of `TriageSummary.tsx` that calls `PATCH /sessions/:id` to clear the flag status.

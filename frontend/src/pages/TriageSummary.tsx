@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ProvenanceBadge } from '@/components/ProvenanceBadge';
-import { ArrowLeft, Check, AlertTriangle, ShieldCheck, Edit2, Save, X, ChevronDown, ChevronUp, Sparkles, BrainCircuit } from 'lucide-react';
+import { ArrowLeft, Check, AlertTriangle, ShieldCheck, Edit2, Save, X, ChevronDown, ChevronUp, Sparkles, BrainCircuit, Calendar, ExternalLink } from 'lucide-react';
 import { API_URL } from '@/lib/api';
 
 interface Session {
@@ -50,6 +50,7 @@ interface ExtractedField {
   extraction_id: string;
   field_name: string;
   field_value: string;
+  document_id?: string;
 }
 
 interface Summary {
@@ -552,24 +553,62 @@ export default function TriageSummary() {
           )}
         </CollapsibleSection>
 
-        {/* SECTION: Medical Documents */}
+        {/* SECTION: Medical Timeline */}
         <CollapsibleSection 
-          title="Medical Documents" 
+          title="Medical Timeline" 
           badge={documents.length === 0 ? "No data" : `${documents.length} files`}
         >
           {documents.length === 0 ? (
             <p className="text-muted italic">No documents uploaded.</p>
           ) : (
-            <div className="flex flex-wrap gap-4">
-              {documents.map(doc => (
-                <div key={doc.document_id} className="p-4 border border-warmgray rounded-xl flex items-center gap-3 bg-sand/30">
-                  <div className="w-10 h-10 bg-white border border-warmgray rounded-lg flex items-center justify-center">📄</div>
-                  <div>
-                    <a href={doc.file_url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary hover:underline">View Document</a>
-                    <p className="text-xs text-muted mt-0.5">Status: {doc.ocr_status || 'Processed'}</p>
+            <div className="relative border-l-2 border-primary/20 ml-4 sm:ml-6 pl-6 sm:pl-8 py-2 space-y-8">
+              {(() => {
+                const docsWithDates = documents.map(doc => {
+                  const dDate = extractions.find(e => (e.document_id === doc.document_id || (doc as any).id === e.document_id) && e.field_name === 'document_date');
+                  return { ...doc, extractedDate: dDate ? dDate.field_value : null };
+                });
+                
+                const sortedDocs = docsWithDates.sort((a, b) => {
+                  if (a.extractedDate && b.extractedDate) return new Date(a.extractedDate).getTime() - new Date(b.extractedDate).getTime();
+                  if (a.extractedDate) return -1;
+                  if (b.extractedDate) return 1;
+                  return 0;
+                });
+
+                return sortedDocs.map((doc, idx) => (
+                  <div key={doc.document_id || idx} className="relative">
+                    <div className="absolute w-4 h-4 bg-primary rounded-full -left-[35px] sm:-left-[41px] top-1 border-4 border-white shadow-sm" />
+                    
+                    <div className="bg-sand/30 border border-warmgray rounded-xl p-4 transition-all hover:shadow-md hover:border-primary/30">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                        <h4 className="text-sm font-bold text-charcoal">
+                          {doc.extractedDate ? (
+                            <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-primary"/> {doc.extractedDate}</span>
+                          ) : (
+                            <span className="text-muted italic">Date unknown</span>
+                          )}
+                        </h4>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                          doc.ocr_status === 'completed' ? 'bg-success/10 text-success' : 'bg-warmgray text-muted'
+                        }`}>
+                          {doc.ocr_status || 'Processed'}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white border border-warmgray rounded-lg flex items-center justify-center shadow-sm">
+                          📄
+                        </div>
+                        <div>
+                          <a href={doc.file_url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary hover:underline flex items-center gap-1">
+                            View Document <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ));
+              })()}
             </div>
           )}
         </CollapsibleSection>
@@ -616,8 +655,15 @@ export default function TriageSummary() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {extractions.map(ext => (
-                <div key={ext.extraction_id} className="bg-sand/50 p-4 rounded-xl border border-warmgray">
-                  <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-1">{ext.field_name}</p>
+                <div key={ext.extraction_id} className={`bg-sand/50 p-4 rounded-xl border transition-all ${ext.confidence < 0.7 ? 'border-warning shadow-[0_0_8px_rgba(234,179,8,0.3)]' : 'border-warmgray'}`}>
+                  <div className="flex justify-between items-start mb-1">
+                    <p className="text-xs font-semibold text-muted uppercase tracking-wider">{ext.field_name}</p>
+                    {ext.confidence < 0.7 && (
+                      <span className="text-[10px] bg-warning/20 text-warning-foreground border border-warning/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> Low Confidence
+                      </span>
+                    )}
+                  </div>
                   <p className="text-charcoal font-medium">{ext.field_value || '—'}</p>
                 </div>
               ))}

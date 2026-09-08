@@ -57,3 +57,49 @@ html.large-text h1 {
 html.large-text p, html.large-text button, html.large-text input {
   font-size: 1.1em;
 }
+
+/* High-contrast mode for visually impaired users */
+html.high-contrast {
+  filter: contrast(1.4);
+}
+
+html.high-contrast body {
+  background-color: #000 !important;
+  color: #fff !important;
+}
+
+html.high-contrast .bg-sand,
+html.high-contrast .bg-white,
+html.high-contrast [class*="bg-warmgray"],
+html.high-contrast [class*="bg-[#f7f4ed]"] {
+  background-color: #111 !important;
+  color: #fff !important;
+}
+
+html.high-contrast button,
+html.high-contrast input,
+html.high-contrast textarea {
+  border-color: #fff !important;
+  border-width: 2px !important;
+  color: #fff !important;
+  background-color: #222 !important;
+}
+
+html.high-contrast button:hover,
+html.high-contrast button:focus {
+  background-color: #444 !important;
+}
+
+html.high-contrast .text-muted,
+html.high-contrast .text-charcoal {
+  color: #eee !important;
+}
+
+html.high-contrast .text-primary {
+  color: #6db3f2 !important;
+}
+
+html.high-contrast .text-danger,
+html.high-contrast .text-destructive {
+  color: #ff6b6b !important;
+}

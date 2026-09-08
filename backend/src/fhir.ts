@@ -122,5 +122,25 @@ export async function generateFhirBundle(sessionId: string) {
     });
   });
 
+  // 5. Add Consent Resource
+  bundle.entry.push({
+    fullUrl: `urn:uuid:Consent-${sessionData.id}`,
+    resource: {
+      resourceType: "Consent",
+      id: `Consent-${sessionData.id}`,
+      status: "active",
+      category: [
+        {
+          coding: [{ system: "http://terminology.hl7.org/CodeSystem/consentcategorycodes", code: "patient-consent" }]
+        }
+      ],
+      patient: { reference: `urn:uuid:${patientId}` },
+      dateTime: sessionData.created_at,
+      policyRule: {
+        coding: [{ system: "http://terminology.hl7.org/CodeSystem/consentpolicycodes", code: "abdm-consent" }]
+      }
+    }
+  });
+
   return bundle;
 }

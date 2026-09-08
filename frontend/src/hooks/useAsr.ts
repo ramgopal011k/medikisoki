@@ -148,19 +148,8 @@ export function useAsr() {
         recorder.onstop = async () => {
           setIsListening(false);
 
-          // If browser speech recognition already produced text, use it!
-          const existingText = finalTranscriptRef.current.trim();
-          if (existingText.length > 0) {
-            cleanupMedia();
-            setStatus('idle');
-            if (onResultCallbackRef.current) {
-              onResultCallbackRef.current(existingText);
-            }
-            if (onEndCallbackRef.current) {
-              onEndCallbackRef.current();
-            }
-            return;
-          }
+          // We will send recorded audio chunks to Sarvam AI / Gemini backend first
+          // and only fallback to Web Speech API if it fails.
 
           // Otherwise, send recorded audio chunks to Sarvam AI / Gemini backend
           if (audioChunksRef.current.length > 0) {
@@ -168,12 +157,13 @@ export function useAsr() {
             setStatus('processing');
 
             try {
+              const isMp4 = !recorder?.mimeType || recorder?.mimeType.includes('mp4');
               const audioBlob = new Blob(audioChunksRef.current, {
-                type: recorder?.mimeType || 'audio/webm',
+                type: recorder?.mimeType || 'audio/mp4',
               });
 
               const formData = new FormData();
-              formData.append('file', audioBlob, 'speech.webm');
+              formData.append('file', audioBlob, isMp4 ? 'speech.mp4' : 'speech.webm');
               formData.append('language', requestedLang);
 
               const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -194,15 +184,30 @@ export function useAsr() {
                 }
               } else {
                 console.warn('Backend ASR returned non-200 status:', response.status);
-              }
+                  // Fallback to Web Speech on non-200
+                  const existingText = finalTranscriptRef.current.trim();
+                  if (existingText.length > 0) {
+                    if (onResultCallbackRef.current) onResultCallbackRef.current(existingText);
+                  }
+                }
             } catch (postErr) {
               console.warn('Failed to send audio to backend ASR:', postErr);
+              // Fallback to Web Speech on network error
+              const existingText = finalTranscriptRef.current.trim();
+              if (existingText.length > 0) {
+                if (onResultCallbackRef.current) onResultCallbackRef.current(existingText);
+              }
             } finally {
               setIsProcessing(false);
               setStatus('idle');
             }
           } else {
+            // No audio chunks captured, fallback to Web Speech
             setStatus('idle');
+            const existingText = finalTranscriptRef.current.trim();
+            if (existingText.length > 0) {
+              if (onResultCallbackRef.current) onResultCallbackRef.current(existingText);
+            }
           }
 
           cleanupMedia();
@@ -211,7 +216,7 @@ export function useAsr() {
           }
         };
 
-        recorder.start(250); // collect chunks every 250ms
+        recorder.start(); // do not use timeslice (250) as it breaks iOS Safari MediaRecorder
       } catch (recErr) {
         console.warn('MediaRecorder setup error:', recErr);
       }
@@ -246,9 +251,7 @@ export function useAsr() {
             if (currentText) {
               setTranscript(currentText);
               finalTranscriptRef.current = (final || currentText).trim();
-              if (onResultCallbackRef.current && final.trim()) {
-                onResultCallbackRef.current(final.trim());
-              }
+              // Removed instant onResultCallbackRef to prevent preempting Sarvam ASR
             }
           };
 

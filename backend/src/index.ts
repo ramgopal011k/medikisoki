@@ -123,21 +123,44 @@ app.use('/documents', documentsRouter);
 // Doctor authentication endpoint
 app.post('/auth/login', (req: Request, res: Response) => {
   const { email, password } = req.body;
+  
+  // Super Admin login
+  if (
+    (email === 'head' || email === 'heda' || email === 'superadmin') && 
+    (password === 'admin123' || password === 'demo123')
+  ) {
+    return res.json({
+      token: 'mock-superadmin-token',
+      user: {
+        doctor_id: 'superadmin',
+        name: 'Super Admin',
+        email: email,
+        hospital_id: 'all',
+        uid: 'admin-uid',
+        role: 'head'
+      }
+    });
+  }
+
+  // Doctor login
   if (
     (email === 'doctor@demo.com' && password === 'demo123') ||
-    (email === 'doctor@medikiosk.com' && password === 'demo1234')
+    (email === 'doctor@medikiosk.com' && password === 'demo1234') ||
+    (email === 'dr.sharma' && password === 'demo123')
   ) {
     return res.json({
       token: 'mock-doctor-token',
       user: {
         doctor_id: 'd1111111-1111-1111-1111-111111111111',
-        name: 'Dr. Demo',
+        name: 'Dr. Rajesh Varma',
         email: email,
         hospital_id: '11111111-1111-1111-1111-111111111111',
-        uid: 'mock-uid'
+        uid: 'mock-uid',
+        role: 'doctor'
       }
     });
   }
+
   return res.status(401).json({ error: 'Invalid credentials. Use doctor@demo.com / demo123' });
 });
 

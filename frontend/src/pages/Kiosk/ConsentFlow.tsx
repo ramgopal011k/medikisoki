@@ -53,10 +53,6 @@ export default function ConsentFlow() {
   }, [isListening, abhaId]);
 
   useEffect(() => {
-    localStorage.removeItem('patient_session');
-    localStorage.removeItem('session_id');
-    localStorage.removeItem('chief_complaint');
-
     if (urlLang && !urlHospitalId) {
       // If language was provided but no hospital ID, fetch hospitals
       fetch(`${API_URL}/api/hospitals`)
