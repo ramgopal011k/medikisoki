@@ -1,4 +1,11 @@
 {
-  "builds": [{ "src": "frontend/dist", "use": "@vercel/static" }],
-  "routes": [{ "src": "/(.*)", "dest": "/frontend/dist/index.html" }]
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }
