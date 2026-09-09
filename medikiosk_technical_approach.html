@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MediKiosk - Technical Approach | Smart India Hackathon 2026</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800;900&family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600;1,700&family=Outfit:wght@500;600;700;800;900&display=swap');
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #0b1329;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 0;
+    }
+
+    /* Standard 16:9 Presentation Slide Canvas */
+    .slide-canvas {
+      width: 1920px;
+      height: 1080px;
+      background: #ffffff;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Top Header */
+    .header {
+      height: 105px;
+      padding: 8px 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #e2e8f0;
+      background: #ffffff;
+      position: relative;
+    }
+
+    .brand-area {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 380px;
+    }
+
+    .brand-title-wrap {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .brand-text-logo {
+      font-family: 'Cinzel', serif;
+      font-size: 38px;
+      font-weight: 800;
+      font-style: italic;
+      color: #09132c;
+      letter-spacing: -0.5px;
+      line-height: 1.05;
+    }
+
+    .brand-subtext {
+      font-size: 11px;
+      font-weight: 700;
+      color: #0284c7;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .slide-title {
+      text-align: center;
+      flex: 1;
+    }
+
+    .slide-title h2 {
+      font-family: 'Cinzel', 'Times New Roman', serif;
+      font-size: 46px;
+      font-weight: 900;
+      letter-spacing: 3px;
+      color: #090e1a;
+      text-transform: uppercase;
+    }
+
+    .sih-badge-area {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 380px;
+      justify-content: flex-end;
+    }
+
+    .sih-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sih-brain-icon {
+      width: 58px;
+      height: 58px;
+    }
+
+    .sih-text {
+      text-align: left;
+    }
+
+    .sih-text .main-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: #1e3a8a;
+      line-height: 1.05;
+      letter-spacing: -0.2px;
+    }
+
+    .sih-text .year {
+      font-size: 26px;
+      font-weight: 900;
+      color: #0284c7;
+      line-height: 1;
+    }
+
+    .sih-text .sub {
+      font-size: 10px;
+      font-weight: 700;
+      color: #64748b;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    /* Main Body Area */
+    .main-content {
+      flex: 1;
+      display: flex;
+      padding: 14px 28px 8px 28px;
+      gap: 16px;
+      background: #f8fafc;
+      overflow: hidden;
+    }
+
+    /* Left Section: 5 Architecture Pillars + Tech Badges Bar */
+    .architecture-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .pillars-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      flex: 1;
+    }
+
+    .pillar-card {
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+      position: relative;
+    }
+
+    .pillar-header {
+      padding: 10px 6px;
+      text-align: center;
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 13.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      border-radius: 10px 10px 0 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .pillar-header .sub-badge {
+      font-size: 10px;
+      font-weight: 600;
+      opacity: 0.95;
+      text-transform: none;
+      letter-spacing: 0px;
+    }
+
+    .header-1 { background: linear-gradient(135deg, #1e40af, #2563eb); }
+    .header-2 { background: linear-gradient(135deg, #0f766e, #0d9488); }
+    .header-3 { background: linear-gradient(135deg, #5b21b6, #7c3aed); }
+    .header-4 { background: linear-gradient(135deg, #1d4ed8, #2563eb); }
+    .header-5 { background: linear-gradient(135deg, #0369a1, #0284c7); }
+
+    .pillar-body {
+      padding: 12px 10px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      justify-content: space-between;
+    }
+
+    .top-stack-block {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tech-showcase-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .tech-item-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tech-logo-icon {
+      width: 32px;
+      height: 32px;
+    }
+
+    .tech-name-bold {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.1;
+    }
+
+    .tech-sub-tag {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+    }
+
+    .multi-subtech-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .micro-pill {
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 3px 6px;
+      border-radius: 6px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      color: #334155;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    /* Kiosk UI Mini Preview inside Pillar 1 */
+    .kiosk-screen-mockup {
+      width: 100%;
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 8px 6px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.06);
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .mockup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 4px;
+    }
+
+    .mockup-title {
+      font-size: 9px;
+      font-weight: 800;
+      color: #0284c7;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .mockup-lang {
+      font-size: 8px;
+      background: #e0f2fe;
+      color: #0369a1;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    .mockup-body {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .mockup-voice-btn {
+      background: #fef2f2;
+      border: 1.5px dashed #ef4444;
+      border-radius: 5px;
+      padding: 4px 6px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 8.5px;
+      font-weight: 800;
+      color: #b91c1c;
+      justify-content: center;
+    }
+
+    .mockup-tags {
+      display: flex;
+      gap: 3px;
+      justify-content: center;
+    }
+
+    .mockup-tag {
+      font-size: 7.5px;
+      background: #f1f5f9;
+      padding: 2px 5px;
+      border-radius: 3px;
+      color: #334155;
+      font-weight: 700;
+      border: 1px solid #e2e8f0;
+    }
+
+    .mockup-actions-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 2px;
+    }
+
+    .mockup-ocr-pill {
+      font-size: 7.5px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .mockup-status {
+      font-size: 7.5px;
+      color: #10b981;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    /* Mini Diagrams / Graphics for other pillars */
+    .pillar-visual-block {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .visual-label {
+      font-size: 9px;
+      font-weight: 800;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      text-align: center;
+    }
+
+    .feature-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      margin-top: 2px;
+    }
+
+    .feature-list li {
+      font-size: 11.5px;
+      color: #1e293b;
+      line-height: 1.38;
+      font-weight: 600;
+      position: relative;
+      padding-left: 15px;
+    }
+
+    .feature-list li strong {
+      color: #0f172a;
+      font-weight: 800;
+    }
+
+    .feature-list li::before {
+      content: "•";
+      position: absolute;
+      left: 2px;
+      font-size: 18px;
+      line-height: 1;
+      color: #0284c7;
+      font-weight: bold;
+    }
+
+    /* Bottom Technologies Bar */
+    .technologies-bar-container {
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 12px;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    }
+
+    .tech-bar-title-pill {
+      background: #0f172a;
+      color: #ffffff;
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 6px 14px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      text-transform: uppercase;
+    }
+
+    .tech-chips-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .tech-badge-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 4px 9px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    .tech-badge-chip svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Right Section: Implementation Process */
+    .process-container {
+      width: 480px;
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+    }
+
+    .process-header {
+      padding: 10px 16px;
+      border-bottom: 2px solid #fee2e2;
+      background: #fff5f5;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .process-header h3 {
+      font-size: 16.5px;
+      font-weight: 800;
+      color: #991b1b;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .process-steps-list {
+      padding: 14px 14px 10px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      flex: 1;
+      position: relative;
+    }
+
+    /* Connecting vertical line behind step bubbles */
+    .process-steps-list::before {
+      content: "";
+      position: absolute;
+      top: 36px;
+      bottom: 45px;
+      left: 36px;
+      width: 3px;
+      background: #e2e8f0;
+      z-index: 1;
+    }
+
+    .process-step-card {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      background: #ffffff;
+      border: 1px solid #f1f5f9;
+      border-radius: 10px;
+      padding: 10px 12px;
+      position: relative;
+      z-index: 2;
+      transition: all 0.2s ease;
+    }
+
+    .process-step-card:hover {
+      border-color: #cbd5e1;
+      background: #fafafa;
+    }
+
+    .step-left-visual {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 44px;
+    }
+
+    .step-number-bubble {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #0284c7;
+      color: #ffffff;
+      font-size: 13.5px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);
+      border: 2px solid #ffffff;
+    }
+
+    .step-icon-box {
+      width: 38px;
+      height: 38px;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #0284c7;
+    }
+
+    .step-content {
+      flex: 1;
+    }
+
+    .step-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 3px;
+    }
+
+    .step-content h4 {
+      font-size: 13px;
+      font-weight: 800;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .step-badge-tag {
+      font-size: 8.5px;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #f1f5f9;
+      color: #475569;
+      text-transform: uppercase;
+    }
+
+    .step-content p {
+      font-size: 11px;
+      line-height: 1.38;
+      color: #475569;
+      font-weight: 500;
+    }
+
+    .step-content p strong {
+      color: #0f172a;
+      font-weight: 700;
+    }
+
+    /* Bottom Footer Banner */
+    .footer-banner {
+      height: 34px;
+      background: linear-gradient(90deg, #091e42, #1e3a8a, #0369a1, #091e42);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      gap: 16px;
+    }
+
+    .footer-dot {
+      color: #38bdf8;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="slide-canvas">
+    
+    <!-- Top Header -->
+    <header class="header">
+      <div class="brand-area">
+        <div class="brand-title-wrap">
+          <div class="brand-text-logo">MediKiosk</div>
+          <div class="brand-subtext">
+            <span>All India Institute of Ayurveda & MoA</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-title">
+        <h2>TECHNICAL APPROACH</h2>
+      </div>
+
+      <div class="sih-badge-area">
+        <div class="sih-logo">
+          <!-- SIH Brain & Bulb Colored SVG -->
+          <svg class="sih-brain-icon" viewBox="0 0 100 100" fill="none">
+            <rect width="100" height="100" rx="16" fill="#f8fafc"/>
+            <circle cx="50" cy="50" r="44" stroke="#e2e8f0" stroke-width="2.5"/>
+            <!-- Left Brain Side (Orange) -->
+            <path d="M50 16 C34 16 22 28 22 45 C22 55 27 63 35 68 L36 78 L48 78 L50 82 Z" fill="#ea580c"/>
+            <!-- Right Digital Tech Side (Cyan/Blue) -->
+            <path d="M50 16 C66 16 78 28 78 45 C78 55 73 63 65 68 L64 78 L52 78 L50 82 Z" fill="#0284c7"/>
+            <!-- Bulb Filament / Brain Connections -->
+            <circle cx="36" cy="36" r="3.5" fill="#ffffff"/>
+            <circle cx="43" cy="52" r="3.5" fill="#ffffff"/>
+            <circle cx="64" cy="36" r="3.5" fill="#ffffff"/>
+            <circle cx="57" cy="52" r="3.5" fill="#ffffff"/>
+            <path d="M36 36 L43 52 M64 36 L57 52" stroke="#ffffff" stroke-width="2"/>
+            <rect x="36" y="80" width="28" height="6" rx="3" fill="#64748b"/>
+            <text x="50" y="94" text-anchor="middle" font-family="'Outfit', sans-serif" font-weight="900" font-size="11" fill="#0f172a">SIH</text>
+          </svg>
+          <div class="sih-text">
+            <div class="main-title">SMART INDIA</div>
+            <div class="year">HACKATHON 2026</div>
+            <div class="sub">Problem Statement 4 • Ministry of Ayush</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- Left 5 Columns + Bottom Bar -->
+      <div class="architecture-container">
+        <div class="pillars-grid">
+          
+          <!-- Column 1: FRONTEND UI -->
+          <div class="pillar-card">
+            <div class="pillar-header header-1">
+              <span>1. FRONTEND UI</span>
+              <span class="sub-badge">(Progressive Web App Kiosk)</span>
+            </div>
+            <div class="pillar-body">
+              <div class="top-stack-block">
+                <!-- React 19 Icon & Details -->
+                <div class="tech-showcase-box">
+                  <div class="tech-item-row">
+                    <svg class="tech-logo-icon" viewBox="-11.5 -10.23174 23 20.46348" fill="#06b6d4">
+                      <circle cx="0" cy="0" r="2.05" fill="#06b6d4"/>
+                      <g stroke="#06b6d4" stroke-width="1.2" fill="none">
+                        <ellipse rx="11" ry="4.2"/>
+                        <ellipse rx="11" ry="4.2" transform="rotate(60)"/>
+                        <ellipse rx="11" ry="4.2" transform="rotate(120)"/>
+                      </g>
+                    </svg>
+                    <div>
+                      <div class="tech-name-bold">React 19</div>
+                      <div class="tech-sub-tag">(TypeScript)</div>
+                    </div>
+                  </div>
+
+                  <div class="multi-subtech-list">
+                    <span class="micro-pill">⚡ Vite 8</span>
+                    <span class="micro-pill">🎨 Tailwind CSS v4</span>
+                    <span class="micro-pill">✨ Lucide Icons</span>
+                  </div>
+                </div>
+
+                <!-- Mini Kiosk Screen Mockup -->
+                <div class="kiosk-screen-mockup">
+                  <div class="mockup-header">
+                    <span class="mockup-title">🏥 MediKiosk OPD</span>
+                    <span class="mockup-lang">EN | हिंदी</span>
+                  </div>
+                  <div class="mockup-body">
+                    <div class="mockup-voice-btn">
+                      <span>🎙️</span>
+                      <span>Speak Symptoms (बोलें)</span>
+                    </div>
+                    <div class="mockup-tags">
+                      <span class="mockup-tag">Chest Pain</span>
+                      <span class="mockup-tag">Fever</span>
+                      <span class="mockup-tag">Cough</span>
+                    </div>
+                    <div class="mockup-actions-row">
+                      <span class="mockup-ocr-pill">📷 Scan Prescription</span>
+                      <span class="mockup-status">● Offline Ready</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Features -->
+              <ul class="feature-list">
+                <li><strong>Touch-First Kiosk:</strong> 64px touch-targets for elderly & low-literacy users</li>
+                <li><strong>Voice Assistance:</strong> Bilingual Indian speech (Hindi & English)</li>
+                <li><strong>Prescription OCR:</strong> Live camera document capture</li>
+                <li><strong>Offline-First:</strong> IndexedDB local cache queue (idb-keyval)</li>
+                <li><strong>WCAG AA:</strong> High-contrast & scalable accessibility</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Column 2: BACKEND API -->
+          <div class="pillar-card">
+            <div class="pillar-header header-2">
+              <span>2. BACKEND API & LOGIC</span>
+              <span class="sub-badge">(Node.js / Express & TypeScript)</span>
+            </div>
+            <div class="pillar-body">
+              <div class="top-stack-block">
+                <div class="tech-showcase-box">
+                  <div class="tech-item-row">
+                    <!-- Express / Node Icon -->
+                    <svg class="tech-logo-icon" viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2.2">
+                      <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                      <polyline points="2 17 12 22 22 17"/>
+                      <polyline points="2 12 12 17 22 12"/>
+                    </svg>
+                    <div>
+                      <div class="tech-name-bold">Express.js</div>
+                      <div class="tech-sub-tag">Node.js + TypeScript</div>
+                    </div>
+                  </div>
+
+                  <div class="multi-subtech-list">
+                    <span class="micro-pill">⚡ Async REST</span>
+                    <span class="micro-pill">🛡️ RedFlag Engine</span>
+                    <span class="micro-pill">🔄 Session FSM</span>
+                  </div>
+                </div>
+
+                <!-- Server Architecture Graphic -->
+                <div class="pillar-visual-block">
+                  <div class="visual-label">Realtime Orchestration Pipeline</div>
+                  <svg width="100%" height="42" viewBox="0 0 200 50" fill="none">
+                    <rect x="5" y="6" width="76" height="38" rx="6" fill="#e6fffa" stroke="#0d9488" stroke-width="1.5"/>
+                    <text x="43" y="24" font-size="9" font-weight="800" fill="#0f766e" text-anchor="middle">API Server</text>
+                    <text x="43" y="35" font-size="7.5" font-weight="600" fill="#14b8a6" text-anchor="middle">REST :3001</text>
+                    
+                    <path d="M82 25 L116 25" stroke="#0d9488" stroke-width="2" stroke-dasharray="3 2"/>
+                    <polygon points="116,21 124,25 116,29" fill="#0d9488"/>
+
+                    <rect x="126" y="6" width="69" height="38" rx="6" fill="#f0fdfa" stroke="#0d9488" stroke-width="1.5"/>
+                    <text x="160" y="24" font-size="9" font-weight="800" fill="#0f766e" text-anchor="middle">Triage Core</text>
+                    <text x="160" y="35" font-size="7.5" font-weight="600" fill="#14b8a6" text-anchor="middle">Rule Engine</text>
+                  </svg>
+                </div>
+              </div>
+
+              <!-- Features -->
+              <ul class="feature-list">
+                <li><strong>Async RESTful API:</strong> Non-blocking high-throughput Express engine</li>
+                <li><strong>Red-Flag Engine:</strong> Deterministic emergency triage interceptor</li>
+                <li><strong>Adaptive Traversal:</strong> SOCRATES clinical questioning tree</li>
+                <li><strong>Session State FSM:</strong> Automated ephemeral memory release</li>
+                <li><strong>Data Provenance:</strong> Tagging Patient vs OCR vs Doctor facts</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Column 3: DATABASE & REALTIME -->
+          <div class="pillar-card">
+            <div class="pillar-header header-3">
+              <span>3. DATABASE & REALTIME</span>
+              <span class="sub-badge">(Supabase & PostgreSQL)</span>
+            </div>
+            <div class="pillar-body">
+              <div class="top-stack-block">
+                <div class="tech-showcase-box">
+                  <div class="tech-item-row">
+                    <!-- PostgreSQL Elephant + Supabase Bolt -->
+                    <svg class="tech-logo-icon" viewBox="0 0 24 24" fill="none">
+                      <path d="M12.5 2L3 14H11.5L10.5 22L20 10H11.5L12.5 2Z" fill="#7c3aed" stroke="#6d28d9" stroke-width="1.2"/>
+                    </svg>
+                    <div>
+                      <div class="tech-name-bold">PostgreSQL</div>
+                      <div class="tech-sub-tag">Supabase Managed</div>
+                    </div>
+                  </div>
+
+                  <div class="multi-subtech-list">
+                    <span class="micro-pill">⚡ Realtime CDC</span>
+                    <span class="micro-pill">🔒 Row-Level Security</span>
+                    <span class="micro-pill">🛡️ DPDP 2023</span>
+                  </div>
+                </div>
+
+                <!-- Database Cylinders -->
+                <div class="pillar-visual-block">
+                  <div class="visual-label">Relational Schemas & Sync</div>
+                  <div style="display:flex; align-items:center; justify-content:space-around; padding:2px 0;">
+                    <svg width="50" height="42" viewBox="0 0 60 48" fill="none">
+                      <ellipse cx="30" cy="10" rx="22" ry="7" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.8"/>
+                      <path d="M8 10v12c0 3.87 9.85 7 22 7s22-3.13 22-7V10" fill="none" stroke="#7c3aed" stroke-width="1.8"/>
+                      <path d="M8 22v12c0 3.87 9.85 7 22 7s22-3.13 22-7V22" fill="none" stroke="#7c3aed" stroke-width="1.8"/>
+                    </svg>
+                    <div style="font-size:8.5px; font-weight:700; color:#5b21b6; line-height:1.4;">
+                      <div>• sessions</div>
+                      <div>• answers</div>
+                      <div>• ayush_assessments</div>
+                      <div>• summaries</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Features -->
+              <ul class="feature-list">
+                <li><strong>Enterprise PostgreSQL:</strong> Complete ACID transactional guarantees</li>
+                <li><strong>Realtime CDC:</strong> Sub-second WebSocket push to Doctor Queue</li>
+                <li><strong>Granular RLS:</strong> Role-based access control protecting health data</li>
+                <li><strong>Dual-Track Schema:</strong> Allopathic HPI + AYUSH 10-point store</li>
+                <li><strong>DPDP Compliance:</strong> Ephemeral session data retention policies</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Column 4: AI & CLINICAL CORE -->
+          <div class="pillar-card">
+            <div class="pillar-header header-4">
+              <span>4. AI & CLINICAL NLP</span>
+              <span class="sub-badge">(Dual Allopathy & AYUSH AI)</span>
+            </div>
+            <div class="pillar-body">
+              <div class="top-stack-block">
+                <div class="tech-showcase-box">
+                  <div class="tech-item-row">
+                    <!-- Google Gemini Sparkle -->
+                    <svg class="tech-logo-icon" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 2C12 7.52 7.52 12 2 12C7.52 12 12 16.48 12 22C12 16.48 16.48 12 22 12C16.48 12 12 7.52 12 2Z" fill="url(#gemini-grad2)"/>
+                      <defs>
+                        <linearGradient id="gemini-grad2" x1="2" y1="2" x2="22" y2="22">
+                          <stop stop-color="#2563eb"/>
+                          <stop offset="0.5" stop-color="#7c3aed"/>
+                          <stop offset="1" stop-color="#db2777"/>
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <div>
+                      <div class="tech-name-bold">Google Gemini</div>
+                      <div class="tech-sub-tag">Gemini 1.5 Flash</div>
+                    </div>
+                  </div>
+
+                  <div class="multi-subtech-list">
+                    <span class="micro-pill">🗣️ Sarvam AI (ASR/TTS)</span>
+                    <span class="micro-pill">👁️ Tesseract OCR</span>
+                  </div>
+                </div>
+
+                <!-- Dual Stream Engine Diagram -->
+                <div class="pillar-visual-block">
+                  <div class="visual-label">Dual Clinical Intelligence Engine</div>
+                  <div style="display:flex; gap:4px; align-items:center; justify-content:center; padding:3px 0;">
+                    <span style="font-size:9.5px; font-weight:800; color:#1e40af; background:#eff6ff; padding:3px 6px; border-radius:4px; border:1px solid #bfdbfe;">Allopathy HPI</span>
+                    <span style="font-size:10px; color:#64748b; font-weight:800;">+</span>
+                    <span style="font-size:9.5px; font-weight:800; color:#0f766e; background:#f0fdf4; padding:3px 6px; border-radius:4px; border:1px solid #bbf7d0;">Dashavidha</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Features -->
+              <ul class="feature-list">
+                <li><strong>Gemini 1.5 Flash:</strong> Clinical symptom extraction & off-script routing</li>
+                <li><strong>Sarvam AI:</strong> Saarika vernacular ASR & Bulbul audio prompts</li>
+                <li><strong>Dashavidha Pariksha:</strong> Prakriti, Vikriti, Agni, Dhatu, & Sara</li>
+                <li><strong>Prescription OCR:</strong> Extraction of past drugs & dosages</li>
+                <li><strong>Zero Hallucination:</strong> Deterministic rule-engine safety fallback</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Column 5: HEALTHCARE STANDARDS -->
+          <div class="pillar-card">
+            <div class="pillar-header header-5">
+              <span>5. FHIR & REPORTING</span>
+              <span class="sub-badge">(Standards & EHR Export)</span>
+            </div>
+            <div class="pillar-body">
+              <div class="top-stack-block">
+                <div class="tech-showcase-box">
+                  <div class="tech-item-row">
+                    <!-- HL7 FHIR Logo Icon -->
+                    <svg class="tech-logo-icon" viewBox="0 0 24 24" fill="#0284c7">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 16.5h-2v-2h2v2zm0-4h-2V7h2v7.5z"/>
+                    </svg>
+                    <div>
+                      <div class="tech-name-bold">HL7 FHIR R4</div>
+                      <div class="tech-sub-tag">Interoperable Bundles</div>
+                    </div>
+                  </div>
+
+                  <div class="multi-subtech-list">
+                    <span class="micro-pill">📄 9-Section Summary</span>
+                    <span class="micro-pill">🆔 ABHA / ABDM</span>
+                    <span class="micro-pill">🖨️ PDF Export</span>
+                  </div>
+                </div>
+
+                <!-- Verification Badge Graphic -->
+                <div class="pillar-visual-block">
+                  <div class="visual-label">Clinical Output & Governance</div>
+                  <div style="display:flex; align-items:center; gap:8px; background:#f0f9ff; padding:4px 8px; border-radius:6px; border:1px solid #bae6fd;">
+                    <span style="font-size:18px;">📋</span>
+                    <div style="font-size:9px; font-weight:800; color:#0369a1; line-height:1.25;">
+                      <div>Physician-Ready OPD Note</div>
+                      <div style="color:#0f766e; font-size:8px;">✓ Human-in-the-Loop Verified</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Features -->
+              <ul class="feature-list">
+                <li><strong>HL7 FHIR R4:</strong> JSON Encounter, Patient & Observation Bundles</li>
+                <li><strong>9-Section Summary:</strong> Standardized, physician-ready intake report</li>
+                <li><strong>Bilingual Export:</strong> English & Hindi clinical documentation</li>
+                <li><strong>Clinician Verification:</strong> Human-in-the-Loop inline note editing</li>
+                <li><strong>Hospital HIS Push:</strong> Zero-friction EMR handoff & ABDM compliance</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Bottom Technologies Used Bar -->
+        <div class="technologies-bar-container">
+          <div class="tech-bar-title-pill">TECHNOLOGIES TO BE USED</div>
+          <div class="tech-chips-row">
+            
+            <div class="tech-badge-chip">
+              <svg viewBox="-11.5 -10.23174 23 20.46348" fill="#06b6d4">
+                <circle cx="0" cy="0" r="2.05" fill="#06b6d4"/>
+                <ellipse rx="11" ry="4.2" stroke="#06b6d4" fill="none"/>
+              </svg>
+              <span>React 19</span>
+            </div>
+
+            <div class="tech-badge-chip">
+              <span style="color:#3178c6; font-weight:900;">TS</span>
+              <span>TypeScript</span>
+            </div>
+
+            <div class="tech-badge-chip">
+              <span style="color:#bd34fe; font-size:13px;">⚡</span>
+              <span>Vite 8</span>
+            </div>
+
+            <div class="tech-badge-chip">
+              <span style="color:#06b6d4; font-size:13px;">🌊</span>
+              <span>Tailwind CSS</span>
+            </div>
+
+            <div class="tech-badge-chip">
+              <span style="color:#16a34a; font-weight:800;">⬡</span>
+              <span>Node.js</span>
+            </div>
+
+            <div class="tech-badge-chip">
+              <span style="color:#0f766e; font-weight:800;">ex</span>
+              <span>Express.js</span>
+            </div>
+
+            <div class="tech-badge-chip">
+              <span style="color:#7c3aed; font-weight:800;">⚡</span>
+              <span>Supabase</span>
+            </div>
+
+            <div class="tech-badge-chip">
+              <span style="color:#336791; font-weight:800;">🐘</span>
+              <span>PostgreSQL</span>
+            </div>
+
+            <div class="tech-badge-chip">
+              <span style="color:#2563eb; font-weight:800;">✦</span>
+              <span>Google Gemini</span>
+            </div>
+
+            <div class="tech-badge-chip">
+              <span style="color:#ea580c; font-weight:800;">🇮🇳</span>
+              <span>Sarvam AI</span>
+            </div>
+
+            <div class="tech-badge-chip">
+              <span style="color:#0891b2; font-weight:800;">👁️</span>
+              <span>Tesseract.js</span>
+            </div>
+
+            <div class="tech-badge-chip">
+              <span style="color:#d97706; font-weight:800;">🔥</span>
+              <span>HL7 FHIR R4</span>
+            </div>
+
+            <div class="tech-badge-chip">
+              <span style="color:#475569; font-weight:800;">💾</span>
+              <span>IndexedDB</span>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Implementation Process -->
+      <aside class="process-container">
+        <div class="process-header">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#991b1b" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <h3>IMPLEMENTATION PROCESS</h3>
+        </div>
+
+        <div class="process-steps-list">
+          
+          <!-- Step 1 -->
+          <div class="process-step-card">
+            <div class="step-left-visual">
+              <div class="step-number-bubble">1</div>
+              <div class="step-icon-box">
+                <!-- User / Touch SVG -->
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+              </div>
+            </div>
+            <div class="step-content">
+              <div class="step-header-row">
+                <h4>PATIENT INTAKE & PREPROCESSING</h4>
+                <span class="step-badge-tag">Intake</span>
+              </div>
+              <p>Patient arrives at the kiosk, selects language (<strong>Hindi/English</strong>), and enters ABHA ID or phone number. A <strong>consent-first DPDP 2023</strong> framework gates the session before clinical intake starts.</p>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="process-step-card">
+            <div class="step-left-visual">
+              <div class="step-number-bubble">2</div>
+              <div class="step-icon-box">
+                <!-- OCR / Mic SVG -->
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                  <line x1="12" y1="19" x2="12" y2="22"></line>
+                </svg>
+              </div>
+            </div>
+            <div class="step-content">
+              <div class="step-header-row">
+                <h4>MULTIMODAL SPEECH & OCR CAPTURE</h4>
+                <span class="step-badge-tag">Multimodal</span>
+              </div>
+              <p>Patients articulate symptoms using <strong>Sarvam AI ASR</strong> or high-contrast touch cards. Physical past prescriptions are scanned via <strong>Document OCR</strong> to automatically digitize prior medications, dosages, and history.</p>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="process-step-card">
+            <div class="step-left-visual">
+              <div class="step-number-bubble">3</div>
+              <div class="step-icon-box">
+                <!-- Brain / Stethoscope SVG -->
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 3v18"></path>
+                  <path d="M6 8a6 6 0 0 1 12 0c0 7-6 11-6 11s-6-4-6-11Z"></path>
+                </svg>
+              </div>
+            </div>
+            <div class="step-content">
+              <div class="step-header-row">
+                <h4>DUAL-STREAM AI TRIAGE & RED-FLAGS</h4>
+                <span class="step-badge-tag">AI Triage</span>
+              </div>
+              <p><strong>Google Gemini 1.5 Flash</strong> structures raw facts into Allopathic HPI and 10-point AYUSH <strong>Dashavidha Pariksha</strong> (Prakriti, Agni, Koshtha). The deterministic engine instantly surfaces acute red flags.</p>
+            </div>
+          </div>
+
+          <!-- Step 4 -->
+          <div class="process-step-card">
+            <div class="step-left-visual">
+              <div class="step-number-bubble">4</div>
+              <div class="step-icon-box">
+                <!-- Doctor / Verification SVG -->
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <polyline points="16 11 18 13 22 9"></polyline>
+                </svg>
+              </div>
+            </div>
+            <div class="step-content">
+              <div class="step-header-row">
+                <h4>DOCTOR VERIFICATION (HUMAN-IN-THE-LOOP)</h4>
+                <span class="step-badge-tag">HITL</span>
+              </div>
+              <p>Prioritized patient cards stream into the <strong>Doctor OPD Dashboard</strong> via Supabase Realtime WebSockets. Clinicians inspect clear <strong>provenance badges</strong> (Patient/OCR/Doctor) and verify or modify facts inline.</p>
+            </div>
+          </div>
+
+          <!-- Step 5 -->
+          <div class="process-step-card">
+            <div class="step-left-visual">
+              <div class="step-number-bubble">5</div>
+              <div class="step-icon-box">
+                <!-- FHIR / PDF Document SVG -->
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+              </div>
+            </div>
+            <div class="step-content">
+              <div class="step-header-row">
+                <h4>FHIR STANDARDS & EMR HANDOFF</h4>
+                <span class="step-badge-tag">Export</span>
+              </div>
+              <p>Validated clinical encounters export as standard <strong>HL7 FHIR R4 JSON Bundles</strong> and printable bilingual clinical summaries, enabling zero-friction integration into hospital EMR systems and national <strong>ABDM registers</strong>.</p>
+            </div>
+          </div>
+
+        </div>
+      </aside>
+
+    </main>
+
+    <!-- Bottom Footer Banner -->
+    <footer class="footer-banner">
+      <span class="footer-dot">●</span>
+      <span>SMART INDIA HACKATHON 2026</span>
+      <span class="footer-dot">●</span>
+      <span>MINISTRY OF AYUSH & ALL INDIA INSTITUTE OF AYURVEDA</span>
+      <span class="footer-dot">●</span>
+      <span>PROBLEM STATEMENT 4</span>
+      <span class="footer-dot">●</span>
+      <span>MEDIKIOSK</span>
+      <span class="footer-dot">●</span>
+    </footer>
+
+  </div>
+
+</body>
+</html>

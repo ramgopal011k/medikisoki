@@ -12,6 +12,7 @@ import AyushFlow from './pages/AyushFlow';
 import TriageSummary from './pages/TriageSummary';
 import RedFlagLock from './pages/Kiosk/RedFlagLock';
 import PatientSubmitted from './pages/Kiosk/PatientSubmitted';
+import PatientPreview from './pages/PatientPreview';
 import WelcomeScreen from './pages/Kiosk/WelcomeScreen';
 import PatientLogin from './pages/Patient/PatientLogin';
 import PatientDashboard from './pages/Patient/PatientDashboard';
@@ -90,6 +91,7 @@ function AppRoutes() {
         <Route path="/upload" element={<DocumentUploadFlow />} />
         <Route path="/red-flag-alert" element={<RedFlagLock />} />
         <Route path="/submitted" element={<PatientSubmitted />} />
+        <Route path="/preview" element={<PatientPreview />} />
         <Route path="/medical-history" element={<MedicalHistoryFlow />} />
         
         {/* Patient Portal Routes */}

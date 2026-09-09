@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
 import { ProvenanceBadge } from '@/components/ProvenanceBadge';
-import { ArrowLeft, Check, AlertTriangle, ShieldCheck, Edit2, Save, X, ChevronDown, ChevronUp, Sparkles, BrainCircuit, Calendar, ExternalLink, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft, Check, AlertTriangle, ShieldCheck, Edit2, Save, X,
+  ChevronDown, ChevronUp, Sparkles, BrainCircuit, Calendar,
+  ExternalLink, Trash2, User, Clock, Zap, FileText, ClipboardList,
+  Activity, CheckCircle2, MessageSquare, HeartPulse
+} from 'lucide-react';
 import { API_URL } from '@/lib/api';
 
 interface Session {
@@ -13,7 +17,6 @@ interface Session {
   chief_complaint: string;
   created_at: string;
 }
-
 interface HistoryFact {
   fact_id: string;
   question_text: string;
@@ -21,85 +24,46 @@ interface HistoryFact {
   provenance: 'patient_reported' | 'doctor_entered' | 'system_derived' | 'ocr_extracted';
   verified: number;
 }
+interface RedFlag { flag_id: string; rule_id: string; created_at: string; }
+interface MedicalHistoryItem { item_id: string; category: string; value: string; }
+interface AyushAssessment { assessment_id: string; dimension: string; value: string; }
+interface Document { document_id: string; file_url: string; ocr_status?: string; }
+interface ExtractedField { extraction_id: string; field_name: string; field_value: string; confidence: number; document_id?: string; }
+interface Summary { summary_id: string; generated_text: string; }
+interface PastVisit { session_id: string; date: string; status: string; chief_complaint: string; documents: any[]; doctor_notes: any; }
 
-interface RedFlag {
-  flag_id: string;
-  rule_id: string;
-  created_at: string;
-}
-
-interface MedicalHistoryItem {
-  item_id: string;
-  category: string;
-  value: string;
-}
-
-interface AyushAssessment {
-  assessment_id: string;
-  dimension: string;
-  value: string;
-}
-
-interface Document {
-  document_id: string;
-  file_url: string;
-  ocr_status?: string;
-}
-
-interface ExtractedField {
-  extraction_id: string;
-  field_name: string;
-  field_value: string;
-  confidence: number;
-  document_id?: string;
-}
-
-interface Summary {
-  summary_id: string;
-  generated_text: string;
-}
-
-interface PastVisit {
-  session_id: string;
-  date: string;
-  status: string;
-  chief_complaint: string;
-  documents: any[];
-  doctor_notes: any;
-}
-
-function CollapsibleSection({ title, children, defaultOpen = false, icon: Icon, badge }: any) {
+function CollapsibleSection({ title, children, defaultOpen = false, icon: Icon, badge, urgent = false }: any) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
-    <section className="bg-white rounded-2xl border-2 border-warmgray overflow-hidden shadow-sm">
-      <button 
+    <section className={`bg-white rounded-2xl border-2 overflow-hidden shadow-sm transition-all ${urgent && badge && badge !== 'None' ? 'border-danger/40' : 'border-warmgray'}`}>
+      <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 sm:p-6 bg-white hover:bg-sand/30 transition-colors text-left focus:outline-none"
+        className="w-full flex items-center justify-between px-6 py-4 hover:bg-sand/40 transition-colors text-left focus:outline-none"
       >
         <div className="flex items-center gap-3">
-          {Icon && <Icon className={`w-5 h-5 ${title === 'Red Flags' && badge !== 'None' ? 'text-danger' : 'text-muted'}`} />}
-          <h2 className={`text-lg font-bold uppercase tracking-wider ${title === 'Red Flags' && badge !== 'None' ? 'text-danger' : 'text-muted'}`}>
+          {Icon && (
+            <div className={`w-8 h-8 rounded-lg border flex items-center justify-center ${urgent && badge && badge !== 'None' ? 'bg-danger/8 border-danger/20' : 'bg-sand border-warmgray'}`}>
+              <Icon className={`w-4 h-4 ${urgent && badge && badge !== 'None' ? 'text-danger' : 'text-muted'}`} />
+            </div>
+          )}
+          <h2 className={`text-xs font-bold uppercase tracking-widest ${urgent && badge && badge !== 'None' ? 'text-danger' : 'text-muted'}`}>
             {title}
           </h2>
           {badge && (
-            <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${
-              badge === 'No data' || badge === 'None' 
-                ? 'bg-warmgray/50 text-muted' 
-                : title === 'Red Flags' 
-                  ? 'bg-danger/10 text-danger' 
-                  : 'bg-primary/10 text-primary'
-            }`}>
-              {badge}
-            </span>
+            <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full border ${
+              badge === 'No data' || badge === 'None'
+                ? 'bg-sand text-muted border-warmgray'
+                : urgent
+                ? 'bg-danger/8 text-danger border-danger/20'
+                : 'bg-primary/8 text-primary border-primary/15'
+            }`}>{badge}</span>
           )}
         </div>
-        <div className="text-muted">
-          {isOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-        </div>
+        <span className="text-muted">{isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</span>
       </button>
       {isOpen && (
-        <div className="p-4 sm:p-6 border-t border-warmgray bg-white">
-          {children}
+        <div className="px-6 pb-6 border-t border-warmgray">
+          <div className="pt-5">{children}</div>
         </div>
       )}
     </section>
@@ -120,13 +84,14 @@ export default function TriageSummary() {
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [pastVisits, setPastVisits] = useState<PastVisit[]>([]);
   const [clinicalAlerts, setClinicalAlerts] = useState<any>(null);
-  const [reconciliationConflicts, setReconciliationConflicts] = useState<{field: string, documentValue: string, patientValue: string}[]>([]);
-  
+  const [reconciliationConflicts, setReconciliationConflicts] = useState<{ field: string; documentValue: string; patientValue: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
   const [verifyingFactId, setVerifyingFactId] = useState<string | null>(null);
   const [editingFactId, setEditingFactId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [doctorNotes, setDoctorNotes] = useState('');
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -134,7 +99,6 @@ export default function TriageSummary() {
       try {
         const triageRes = await fetch(`${API_URL}/sessions/${sessionId}/triage`);
         const triageData = await triageRes.json();
-
         if (!ignore && triageData.session) {
           setSession(triageData.session);
           setFacts(triageData.facts || []);
@@ -145,68 +109,42 @@ export default function TriageSummary() {
           setExtractions(triageData.extractions || []);
           setSummaries(triageData.summaries || []);
 
-          // Run clinical analysis on combined text
           const combinedText = [
             triageData.session.chief_complaint,
             ...(triageData.facts || []).map((f: any) => f.answer_value),
             ...(triageData.medicalHistory || []).map((m: any) => m.value),
-            ...(triageData.extractions || []).map((e: any) => e.field_value)
+            ...(triageData.extractions || []).map((e: any) => e.field_value),
           ].join(' ');
+          try {
+            const ar = await fetch(`${API_URL}/api/analyze-records`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: combinedText }) });
+            setClinicalAlerts(await ar.json());
+          } catch {}
 
           try {
-            const analysisRes = await fetch(`${API_URL}/api/analyze-records`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: combinedText })
-            });
-            const analysisData = await analysisRes.json();
-            setClinicalAlerts(analysisData);
-          } catch (e) {
-            console.error('Failed to analyze records', e);
-          }
-          
-          try {
-            const historyRes = await fetch(`${API_URL}/sessions/${sessionId}/history`);
-            const historyData = await historyRes.json();
-            if (!ignore && historyData.data) {
-              setPastVisits(historyData.data);
-            }
-          } catch (e) {
-            console.error('Failed to load past visits', e);
-          }
+            const hr = await fetch(`${API_URL}/sessions/${sessionId}/history`);
+            const hd = await hr.json();
+            if (!ignore && hd.data) setPastVisits(hd.data);
+          } catch {}
 
-          // Reconciliation logic
           if (!ignore) {
-            const conflicts: { field: string, documentValue: string, patientValue: string }[] = [];
-            
+            const conflicts: { field: string; documentValue: string; patientValue: string }[] = [];
             (triageData.extractions || []).forEach((ext: any) => {
-              const fieldLower = ext.field_name.toLowerCase();
-              if (fieldLower.includes('patient') || fieldLower.includes('name')) return; // skip name
-              
-              // Check medical history
-              const medMatch = (triageData.medicalHistory || []).find((m: any) => 
-                m.category.toLowerCase().includes(fieldLower) || fieldLower.includes(m.category.toLowerCase())
+              const fl = ext.field_name.toLowerCase();
+              if (fl.includes('patient') || fl.includes('name')) return;
+              const mm = (triageData.medicalHistory || []).find((m: any) =>
+                m.category.toLowerCase().includes(fl) || fl.includes(m.category.toLowerCase())
               );
-              
-              if (medMatch && medMatch.value && ext.field_value && medMatch.value.toLowerCase().trim() !== ext.field_value.toLowerCase().trim()) {
-                // simple heuristic for mismatch
-                if (!medMatch.value.toLowerCase().includes(ext.field_value.toLowerCase()) && !ext.field_value.toLowerCase().includes(medMatch.value.toLowerCase())) {
-                  conflicts.push({
-                    field: ext.field_name,
-                    documentValue: ext.field_value,
-                    patientValue: medMatch.value
-                  });
-                }
+              if (mm && mm.value && ext.field_value &&
+                !mm.value.toLowerCase().includes(ext.field_value.toLowerCase()) &&
+                !ext.field_value.toLowerCase().includes(mm.value.toLowerCase())) {
+                conflicts.push({ field: ext.field_name, documentValue: ext.field_value, patientValue: mm.value });
               }
             });
             setReconciliationConflicts(conflicts);
           }
         }
-      } catch (err) {
-        console.error('Failed to load triage summary:', err);
-      } finally {
-        if (!ignore) setIsLoading(false);
-      }
+      } catch (err) { console.error('Failed to load triage summary:', err); }
+      finally { if (!ignore) setIsLoading(false); }
     };
     loadData();
     return () => { ignore = true; };
@@ -215,320 +153,311 @@ export default function TriageSummary() {
   const handleVerifyFact = async (factId: string) => {
     setVerifyingFactId(factId);
     try {
-      const res = await fetch(`${API_URL}/history-facts/${factId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ verified: true })
-      });
-      if (res.ok) {
-        setFacts(prev => prev.map(f => f.fact_id === factId ? { ...f, verified: 1 } : f));
-      }
-    } catch (err) {
-      console.error('Failed to verify fact', err);
-    } finally {
-      setVerifyingFactId(null);
-    }
+      const doctorInfo = JSON.parse(localStorage.getItem('doctor_info') || '{}');
+      const res = await fetch(`${API_URL}/history-facts/${factId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ verified: true, doctor_id: doctorInfo.doctor_id }) });
+      if (res.ok) setFacts(prev => prev.map(f => f.fact_id === factId ? { ...f, verified: 1 } : f));
+    } catch (err) { console.error('Verify fact error:', err); } finally { setVerifyingFactId(null); }
   };
-
   const handleSaveFact = async (factId: string) => {
     try {
-      const res = await fetch(`${API_URL}/history-facts/${factId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ verified: true, corrected_value: editValue })
-      });
-      if (res.ok) {
-        setFacts(prev => prev.map(f => f.fact_id === factId ? { ...f, answer_value: editValue, verified: 1, provenance: 'doctor_entered' } : f));
-      }
-    } catch (err) {
-      console.error('Failed to save fact', err);
-    } finally {
-      setEditingFactId(null);
-    }
+      const doctorInfo = JSON.parse(localStorage.getItem('doctor_info') || '{}');
+      const res = await fetch(`${API_URL}/history-facts/${factId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ verified: true, corrected_value: editValue, doctor_id: doctorInfo.doctor_id }) });
+      if (res.ok) setFacts(prev => prev.map(f => f.fact_id === factId ? { ...f, answer_value: editValue, verified: 1, provenance: 'doctor_entered' } : f));
+    } catch (err) { console.error('Save fact error:', err); } finally { setEditingFactId(null); }
   };
-
   const handleRejectFact = async (factId: string) => {
     try {
-      const res = await fetch(`${API_URL}/history-facts/${factId}`, {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        setFacts(prev => prev.filter(f => f.fact_id !== factId));
-      }
-    } catch (err) {
-      console.error('Failed to reject fact', err);
-    }
+      const res = await fetch(`${API_URL}/history-facts/${factId}`, { method: 'DELETE' });
+      if (res.ok) setFacts(prev => prev.filter(f => f.fact_id !== factId));
+    } catch (err) { console.error('Reject fact error:', err); }
   };
-
-  const [doctorNotes, setDoctorNotes] = useState('');
-  const [isSavingNotes, setIsSavingNotes] = useState(false);
-  const [notesSaved, setNotesSaved] = useState(false);
-
   const handleSaveNotes = async () => {
     if (!sessionId) return;
     setIsSavingNotes(true);
     try {
       const doctorInfo = JSON.parse(localStorage.getItem('doctor_info') || '{}');
-      await fetch(`${API_URL}/api/sessions/${sessionId}/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ doctor_id: doctorInfo.doctor_id, notes: doctorNotes })
-      });
+      await fetch(`${API_URL}/api/sessions/${sessionId}/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doctor_id: doctorInfo.doctor_id, notes: doctorNotes }) });
       setNotesSaved(true);
-      setTimeout(() => {
-        setNotesSaved(false);
-        navigate('/doctor');
-      }, 1500);
-    } catch (e) {
-      console.error('Failed to save doctor notes:', e);
-    } finally {
-      setIsSavingNotes(false);
-    }
+      setTimeout(() => { setNotesSaved(false); navigate('/doctor'); }, 1500);
+    } catch (err) { console.error('Save notes error:', err); } finally { setIsSavingNotes(false); }
   };
-
+  
+  const [isRouting, setIsRouting] = useState(false);
+  const handleRouteToHIS = async () => {
+    if (!sessionId) return;
+    setIsRouting(true);
+    try {
+      const res = await fetch(`${API_URL}/sessions/${sessionId}/route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ destination: 'HIS' }) });
+      if (res.ok) {
+        alert('Successfully routed to HIS');
+      }
+    } catch (err) { console.error('Route to HIS error:', err); } finally { setIsRouting(false); }
+  };
   const handleAcknowledgeRedFlags = async () => {
     if (!sessionId) return;
     try {
-      const res = await fetch(`${API_URL}/sessions/${sessionId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ red_flag: false })
-      });
-      if (res.ok) {
-        setSession(prev => prev ? { ...prev, red_flag: false } : null);
-        setRedFlags([]);
-      }
-    } catch (err) {
-      console.error('Failed to acknowledge red flags', err);
-    }
+      const res = await fetch(`${API_URL}/sessions/${sessionId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ red_flag: false }) });
+      if (res.ok) { setRedFlags([]); }
+    } catch (err) { console.error('Acknowledge red flags error:', err); }
   };
 
-  if (isLoading) return <div className="min-h-screen bg-sand flex items-center justify-center font-body text-xl">Loading triage summary...</div>;
-  if (!session) return <div className="min-h-screen bg-sand flex items-center justify-center font-body text-xl">Session not found.</div>;
+  if (isLoading) return (
+    <div className="min-h-screen bg-sand flex items-center justify-center font-body">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-muted font-medium text-sm">Loading triage summary…</p>
+      </div>
+    </div>
+  );
+  if (!session) return (
+    <div className="min-h-screen bg-sand flex items-center justify-center font-body">
+      <p className="text-muted">Session not found.</p>
+    </div>
+  );
+
+  const isUrgent = redFlags.length > 0;
 
   return (
-    <div className="min-h-screen bg-sand font-body pb-12">
-      <header className="bg-white border-b border-warmgray px-6 py-4 flex items-center sticky top-0 z-10 shadow-sm">
-        <Button variant="ghost" className="mr-4 text-charcoal hover:bg-warmgray/50" onClick={() => navigate('/doctor')}>
-          <ArrowLeft className="w-5 h-5 mr-2" />
-          Back to Dashboard
-        </Button>
-        <h1 className="text-2xl font-display text-charcoal">Triage Summary</h1>
+    <div className="min-h-screen bg-sand font-body text-charcoal pb-16">
+
+      {/* ── Header ── */}
+      <header className="bg-white border-b border-warmgray sticky top-0 z-30 shadow-sm">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <button
+            onClick={() => navigate('/doctor')}
+            className="flex items-center gap-2 text-sm font-semibold text-muted hover:text-charcoal transition-colors group"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+            Back to Dashboard
+          </button>
+          <div className="flex items-center gap-2">
+            <HeartPulse className="w-4 h-4 text-primary" />
+            <h1 className="text-sm font-bold text-charcoal">Triage Summary</h1>
+          </div>
+          <div className="w-32" />
+        </div>
       </header>
 
-      <main className="max-w-4xl mx-auto p-6 md:p-8 mt-4 space-y-6">
-        
-        {/* SECTION 1: Patient Information (Always Visible) */}
-        <section className="bg-white rounded-2xl border-2 border-warmgray p-6 sm:p-8 shadow-sm">
-          <div className="flex justify-between items-start mb-6">
-             <h3 className="text-3xl font-display text-charcoal">{session.patient_name}</h3>
-             <span className="px-3 py-1 bg-primary/10 text-primary text-sm font-semibold rounded-full font-body">
-               {new Date(session.created_at).toLocaleDateString()} {new Date(session.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-             </span>
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4">
+
+        {/* ── Urgent Banner ── */}
+        {isUrgent && (
+          <div className="bg-danger/8 border-2 border-danger/40 rounded-2xl p-4 flex items-center gap-4">
+            <div className="w-11 h-11 rounded-xl bg-danger/15 border border-danger/25 flex items-center justify-center shrink-0">
+              <Zap className="w-5 h-5 text-danger" />
+            </div>
+            <div>
+              <p className="font-bold text-danger">⚠ Red Flag Alert — {redFlags.length} trigger{redFlags.length > 1 ? 's' : ''} detected</p>
+              <p className="text-sm text-danger/70 mt-0.5">This patient requires immediate clinical attention.</p>
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
-             <div><p className="text-sm text-muted mb-1">Queue Token</p><p className="font-semibold text-primary text-xl font-display tracking-widest">T-{session.session_id.substring(0,4).toUpperCase()}</p></div>
-             <div><p className="text-sm text-muted mb-1">Aadhaar / ABHA</p><p className="font-semibold text-charcoal text-lg">xxxx-xxxx-{session.dummy_aadhaar ? session.dummy_aadhaar.slice(-4) : '0000'}</p></div>
-             <div><p className="text-sm text-muted mb-1">Preferred Language</p><p className="font-semibold text-charcoal text-lg">{session.language === 'hi' ? 'Hindi' : 'English'}</p></div>
-             <div><p className="text-sm text-muted mb-1">Status</p><p className="font-semibold text-success flex items-center gap-1 text-lg"><ShieldCheck className="w-5 h-5" /> Pending Triage</p></div>
+        )}
+
+        {/* ── Patient Card ── */}
+        <section className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden ${isUrgent ? 'border-danger/40' : 'border-warmgray'}`}>
+          {/* Top gradient bar */}
+          <div className={`h-1.5 w-full ${isUrgent ? 'bg-gradient-to-r from-danger/50 via-danger to-danger/50' : 'bg-gradient-to-r from-primary/30 via-primary to-primary/30'}`} />
+          <div className="p-6 sm:p-8">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+              <div className="flex items-center gap-4">
+                <div className={`w-14 h-14 rounded-2xl border flex items-center justify-center shrink-0 ${isUrgent ? 'bg-danger/8 border-danger/20' : 'bg-primary/8 border-primary/15'}`}>
+                  <User className={`w-7 h-7 ${isUrgent ? 'text-danger' : 'text-primary'}`} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-display font-bold text-charcoal">{session.patient_name}</h2>
+                  <p className="text-sm text-muted flex items-center gap-1.5 mt-0.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    {new Date(session.created_at).toLocaleDateString()} · {new Date(session.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
+              <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 self-start ${isUrgent ? 'bg-danger/8 border-danger/25 text-danger' : 'bg-success/8 border-success/20 text-success'}`}>
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Pending Triage
+              </span>
+            </div>
+
+            {/* Info grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Queue Token', value: `T-${session.session_id.substring(0, 4).toUpperCase()}`, mono: true },
+                { label: 'ABHA / Aadhaar', value: `xxxx-xxxx-${session.dummy_aadhaar?.slice(-4) || '0000'}` },
+                { label: 'Language', value: session.language === 'hi' ? 'Hindi' : 'English' },
+                { label: 'Chief Complaint', value: session.chief_complaint },
+              ].map(({ label, value, mono }) => (
+                <div key={label} className="bg-sand rounded-xl border border-warmgray px-4 py-3">
+                  <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">{label}</p>
+                  <p className={`font-bold text-sm ${mono ? 'text-primary font-display tracking-widest text-base' : 'text-charcoal'}`}>{value}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
-        {/* SECTION: AI Triage Summary (Always Visible) */}
+        {/* ── AI Triage Summary ── */}
         {(summaries.length > 0 || clinicalAlerts) && (
-          <section className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border-2 border-blue-200 p-6 sm:p-8 shadow-sm relative overflow-hidden">
-            <div className="absolute -top-4 -right-4 p-6 opacity-[0.07] pointer-events-none">
+          <section className="bg-white rounded-2xl border-2 border-blue-100 shadow-sm overflow-hidden relative">
+            {/* Decorative watermark */}
+            <div className="absolute -top-4 -right-4 opacity-[0.04] pointer-events-none">
               <BrainCircuit className="w-48 h-48 text-blue-700" />
             </div>
-            <h2 className="text-xl font-bold text-blue-900 uppercase tracking-wider mb-4 border-b border-blue-200/50 pb-2 flex items-center gap-2 relative z-10">
-              <Sparkles className="w-5 h-5 text-blue-600"/> AI Triage Summary
-            </h2>
-            <div className="space-y-4 relative z-10">
+
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 border border-blue-200 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-blue-600" />
+                </div>
+                <h2 className="text-sm font-bold text-blue-800 uppercase tracking-widest">AI Triage Summary</h2>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5 relative z-10">
               {summaries.length > 0 ? (
                 summaries.map(sum => {
                   let parsed: any = null;
-                  let completenessObj = null;
+                  let completenessObj: any = null;
                   try {
                     if (typeof (sum as any).content === 'object' && (sum as any).content !== null) {
                       parsed = (sum as any).content;
                       if (parsed.completeness) completenessObj = parsed.completeness;
                     }
-                  } catch (_e) {}
+                  } catch {}
 
                   return (
                     <div key={sum.summary_id} className="space-y-4">
                       {parsed ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="col-span-1 md:col-span-2">
-                            <h4 className="text-sm font-bold text-blue-900 uppercase">Chief Complaint</h4>
-                            <p className="text-blue-950">{parsed.chief_complaint || 'N/A'}</p>
-                          </div>
-                          <div className="col-span-1 md:col-span-2">
-                            <h4 className="text-sm font-bold text-blue-900 uppercase">History of Present Illness (HPI)</h4>
-                            <ul className="list-disc pl-5 text-blue-950">
-                              {(parsed.hpi || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
-                            </ul>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-blue-900 uppercase">Past Medical History</h4>
-                            <ul className="list-disc pl-5 text-blue-950">
-                              {(parsed.pmh || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
-                            </ul>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-blue-900 uppercase">Past Surgical History</h4>
-                            <ul className="list-disc pl-5 text-blue-950">
-                              {(parsed.psh || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
-                            </ul>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-blue-900 uppercase">Drug History</h4>
-                            <ul className="list-disc pl-5 text-blue-950">
-                              {(parsed.drug_history || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
-                            </ul>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-blue-900 uppercase">Allergy History</h4>
-                            <ul className="list-disc pl-5 text-blue-950">
-                              {(parsed.allergy_history || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
-                            </ul>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-blue-900 uppercase">Family History</h4>
-                            <ul className="list-disc pl-5 text-blue-950">
-                              {(parsed.family_history || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
-                            </ul>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-blue-900 uppercase">Personal History</h4>
-                            <ul className="list-disc pl-5 text-blue-950">
-                              {(parsed.personal_history || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
-                            </ul>
-                          </div>
-                          <div className="col-span-1 md:col-span-2">
-                            <h4 className="text-sm font-bold text-blue-900 uppercase">Review of Systems</h4>
-                            <ul className="list-disc pl-5 text-blue-950">
-                              {(parsed.ros || []).map((item: string, i: number) => <li key={i}>{item}</li>)}
-                            </ul>
-                          </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {[
+                            { label: 'Chief Complaint', data: parsed.chief_complaint, type: 'text', span: 2 },
+                            { label: 'History of Present Illness (HPI)', data: parsed.hpi, type: 'list', span: 2 },
+                            { label: 'Past Medical History', data: parsed.pmh, type: 'list' },
+                            { label: 'Past Surgical History', data: parsed.psh, type: 'list' },
+                            { label: 'Drug History', data: parsed.drug_history, type: 'list' },
+                            { label: 'Allergy History', data: parsed.allergy_history, type: 'list' },
+                            { label: 'Family History', data: parsed.family_history, type: 'list' },
+                            { label: 'Personal History', data: parsed.personal_history, type: 'list' },
+                            { label: 'Review of Systems', data: parsed.ros, type: 'list', span: 2 },
+                          ].map(({ label, data, type, span }) => (
+                            <div key={label} className={`bg-blue-50/60 rounded-xl border border-blue-100 p-4 ${span === 2 ? 'md:col-span-2' : ''}`}>
+                              <h4 className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-2">{label}</h4>
+                              {type === 'text' ? (
+                                <p className="text-sm text-charcoal">{data || 'N/A'}</p>
+                              ) : (
+                                <ul className="space-y-1.5">
+                                  {(data || []).map((item: string, i: number) => (
+                                    <li key={i} className="text-sm text-charcoal flex items-start gap-2">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
+                                      {item}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       ) : (
-                        <p className="text-base sm:text-lg text-blue-950 font-medium leading-relaxed whitespace-pre-wrap">
-                          {sum.generated_text}
-                        </p>
+                        <p className="text-sm text-charcoal leading-relaxed whitespace-pre-wrap">{sum.generated_text}</p>
                       )}
-                      
+
                       {completenessObj && (
-                        <div className="mt-4 bg-white/60 p-4 rounded-xl border border-blue-200">
-                           <div className="flex justify-between items-center mb-2">
-                             <p className="text-sm font-bold text-blue-900 uppercase tracking-wider">Data Completeness Score</p>
-                             <span className={`px-3 py-1 rounded-full text-xs font-bold ${completenessObj.score >= 80 ? 'bg-success/20 text-success' : 'bg-warning/20 text-warning'}`}>
-                               {completenessObj.score}%
-                             </span>
-                           </div>
-                           <div className="w-full bg-blue-100 rounded-full h-2 mb-3">
-                             <div className={`h-2 rounded-full ${completenessObj.score >= 80 ? 'bg-success' : 'bg-warning'}`} style={{ width: `${completenessObj.score}%` }}></div>
-                           </div>
-                           {completenessObj.missing_fields && completenessObj.missing_fields.length > 0 && (
-                             <div>
-                               <p className="text-xs text-blue-800 font-semibold mb-1">Missing Information:</p>
-                               <div className="flex flex-wrap gap-2">
-                                 {completenessObj.missing_fields.map((mf: string, i: number) => (
-                                   <span key={i} className="text-xs bg-danger/10 text-danger border border-danger/20 px-2 py-0.5 rounded">{mf}</span>
-                                 ))}
-                               </div>
-                             </div>
-                           )}
+                        <div className="bg-sand rounded-xl border border-warmgray p-4">
+                          <div className="flex justify-between items-center mb-2">
+                            <p className="text-xs font-bold text-muted uppercase tracking-widest">Data Completeness</p>
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${completenessObj.score >= 80 ? 'bg-success/8 text-success border-success/20' : 'bg-turmeric/10 text-turmeric border-turmeric/20'}`}>
+                              {completenessObj.score}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-warmgray rounded-full h-2 mb-3">
+                            <div className={`h-2 rounded-full transition-all ${completenessObj.score >= 80 ? 'bg-success' : 'bg-turmeric'}`} style={{ width: `${completenessObj.score}%` }} />
+                          </div>
+                          {completenessObj.missing_fields?.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {completenessObj.missing_fields.map((mf: string, i: number) => (
+                                <span key={i} className="text-xs bg-danger/8 text-danger border border-danger/20 px-2 py-0.5 rounded-lg">{mf}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
                   );
                 })
               ) : (
-                <p className="text-base sm:text-lg text-blue-950 font-medium leading-relaxed italic">
-                  Patient presented with chief complaint of {session.chief_complaint}. Clinical analysis is ready for review.
+                <p className="text-sm text-charcoal italic">
+                  Patient presented with chief complaint of <strong>{session.chief_complaint}</strong>. Clinical analysis is ready for review.
                 </p>
               )}
-              
+
               {clinicalAlerts?.analysis?.triage_level && (
-                <div className="mt-6 p-4 bg-white/70 rounded-xl border border-blue-200 backdrop-blur-sm">
-                  <p className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-1">Suggested Triage Level</p>
-                  <p className="text-lg text-blue-950 font-semibold">{clinicalAlerts.analysis.triage_level}</p>
+                <div className="bg-sand border border-warmgray rounded-xl p-4">
+                  <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Suggested Triage Level</p>
+                  <p className="text-base text-charcoal font-bold">{clinicalAlerts.analysis.triage_level}</p>
                 </div>
               )}
             </div>
           </section>
         )}
 
-        {/* SECTION: Current Complaint & Interview */}
-        <CollapsibleSection 
-          title="Current Complaint & Interview" 
-          defaultOpen={true}
-        >
-          <div className="mb-6">
-             <p className="text-sm text-muted mb-1">Chief Complaint</p>
-             <p className="font-semibold text-charcoal text-xl">{session.chief_complaint}</p>
+        {/* ── Current Complaint & Interview ── */}
+        <CollapsibleSection title="Current Complaint & Interview" icon={ClipboardList} defaultOpen={true}>
+          <div className="mb-5 bg-sand rounded-xl border border-warmgray px-4 py-3">
+            <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Chief Complaint</p>
+            <p className="font-display font-bold text-charcoal text-xl">{session.chief_complaint}</p>
           </div>
-          
+
           {facts.length === 0 ? (
-            <p className="text-muted italic">No additional facts recorded for this session.</p>
+            <p className="text-muted italic text-sm">No additional facts recorded for this session.</p>
           ) : (
-            <div className="space-y-6">
-              {facts.map((fact) => (
-                <div key={fact.fact_id} className="relative pl-6 sm:pl-8 border-l-2 border-warmgray/50 pb-2 last:border-transparent">
-                  <div className="absolute w-3 h-3 bg-primary rounded-full -left-[7px] top-2" />
-                  
+            <div className="space-y-5">
+              {facts.map(fact => (
+                <div key={fact.fact_id} className="relative pl-6 border-l-2 border-warmgray pb-4 last:border-transparent">
+                  <div className="absolute w-3 h-3 bg-primary rounded-full -left-[7px] top-1 ring-2 ring-white" />
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                     <div className="flex-1">
-                      <p className="text-sm text-muted mb-1 font-medium">{fact.question_text}</p>
-                      
+                      <p className="text-xs font-semibold text-muted mb-1">{fact.question_text}</p>
                       {editingFactId === fact.fact_id ? (
-                        <div className="flex items-center gap-2 mt-2">
-                          <input 
-                            type="text" 
-                            className="flex-1 border border-primary rounded-md px-3 py-1 text-charcoal font-semibold text-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <input
+                            type="text"
+                            className="flex-1 border-2 border-primary/40 rounded-lg px-3 py-1.5 text-charcoal text-sm focus:outline-none focus:border-primary/70 focus:ring-2 focus:ring-primary/15"
                             value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
+                            onChange={e => setEditValue(e.target.value)}
                           />
-                          <Button size="sm" onClick={() => handleSaveFact(fact.fact_id)} className="bg-primary text-white hover:bg-primary/90 h-8"><Save className="w-4 h-4 mr-1"/> Save</Button>
-                          <Button size="sm" variant="ghost" onClick={() => setEditingFactId(null)} className="h-8"><X className="w-4 h-4"/></Button>
+                          <button onClick={() => handleSaveFact(fact.fact_id)} className="p-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"><Save className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => setEditingFactId(null)} className="p-2 text-muted hover:text-charcoal rounded-lg hover:bg-sand transition-colors"><X className="w-3.5 h-3.5" /></button>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2 group">
-                          <p className="text-lg text-charcoal font-semibold">{fact.answer_value}</p>
-                          <button onClick={() => { setEditingFactId(fact.fact_id); setEditValue(fact.answer_value); }} className="text-muted hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Edit2 className="w-4 h-4" />
+                          <p className="text-charcoal font-semibold">{fact.answer_value}</p>
+                          <button onClick={() => { setEditingFactId(fact.fact_id); setEditValue(fact.answer_value); }} className="text-muted hover:text-primary opacity-0 group-hover:opacity-100 transition-all">
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       )}
                     </div>
-                    
-                    <div className="flex items-center gap-3 self-start mt-1 sm:mt-0">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <ProvenanceBadge type={fact.provenance} />
-                      
                       {fact.verified === 1 ? (
-                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-success/10 text-success border border-success/20">
-                           <Check className="w-3.5 h-3.5" /> Verified
-                         </span>
+                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-success/8 text-success border border-success/20">
+                          <Check className="w-3 h-3" /> Verified
+                        </span>
                       ) : (
-                         <div className="flex items-center gap-2">
-                           <Button 
-                             variant="outline" size="sm" 
-                             className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/10"
-                             onClick={() => handleVerifyFact(fact.fact_id)}
-                             disabled={verifyingFactId === fact.fact_id}
-                           >
-                             {verifyingFactId === fact.fact_id ? 'Verifying...' : 'Verify'}
-                           </Button>
-                           <Button 
-                             variant="outline" size="sm" 
-                             className="h-7 w-7 p-0 text-danger border-danger/20 hover:bg-danger/10"
-                             onClick={() => handleRejectFact(fact.fact_id)}
-                             title="Reject Information"
-                           >
-                             <Trash2 className="w-3.5 h-3.5" />
-                           </Button>
-                         </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleVerifyFact(fact.fact_id)}
+                            disabled={verifyingFactId === fact.fact_id}
+                            className="text-xs px-2.5 py-1 rounded-lg font-bold bg-primary/8 text-primary border border-primary/20 hover:bg-primary hover:text-white transition-all disabled:opacity-50"
+                          >
+                            {verifyingFactId === fact.fact_id ? '…' : 'Verify'}
+                          </button>
+                          <button
+                            onClick={() => handleRejectFact(fact.fact_id)}
+                            className="p-1.5 text-danger/50 hover:text-danger hover:bg-danger/8 rounded-lg transition-colors border border-transparent hover:border-danger/20"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -538,137 +467,80 @@ export default function TriageSummary() {
           )}
         </CollapsibleSection>
 
-        {/* SECTION: Medical History */}
-        <CollapsibleSection 
-          title="Medical History" 
-          badge={medicalHistory.length === 0 ? "No data" : `${medicalHistory.length} items`}
-        >
+        <CollapsibleSection title="Medical History" icon={Activity} badge={medicalHistory.length === 0 ? 'No data' : `${medicalHistory.length} items`}>
           {medicalHistory.length === 0 ? (
-            <p className="text-muted italic">No history provided.</p>
+            <p className="text-muted italic text-sm">No history provided.</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {medicalHistory.map(item => (
-                <div key={item.item_id}>
-                  <h3 className="text-sm font-semibold text-muted uppercase tracking-wider mb-2">{item.category}</h3>
-                  <div className="bg-sand/30 p-4 rounded-xl border border-warmgray/50">
-                    <p className="text-charcoal font-medium whitespace-pre-wrap">{item.value}</p>
-                  </div>
+                <div key={item.item_id} className="bg-sand rounded-xl border border-warmgray p-4">
+                  <h3 className="text-[10px] font-bold text-muted uppercase tracking-widest mb-2">{item.category}</h3>
+                  <p className="text-charcoal font-medium text-sm whitespace-pre-wrap">{item.value}</p>
                 </div>
               ))}
             </div>
           )}
         </CollapsibleSection>
 
-        {/* SECTION: AYUSH Assessment */}
-        <CollapsibleSection 
-          title="AYUSH Assessment" 
-          badge={ayushAssessments.length === 0 ? "No data" : "Available"}
-        >
-          {ayushAssessments.length === 0 ? (
-            <p className="text-muted italic">No AYUSH assessment recorded.</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        {ayushAssessments.length > 0 && (
+          <CollapsibleSection title="AYUSH Assessment" icon={Sparkles} badge="Available">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {ayushAssessments.map(item => (
-                <div key={item.assessment_id} className="bg-primary/5 p-4 rounded-xl border border-primary/10">
-                  <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-1">{item.dimension}</p>
-                  <p className="text-charcoal font-medium capitalize">{item.value}</p>
+                <div key={item.assessment_id} className="bg-lavender/8 border border-lavender/20 rounded-xl p-4">
+                  <p className="text-[10px] font-bold text-lavender uppercase tracking-widest mb-1.5">{item.dimension}</p>
+                  <p className="text-charcoal font-medium capitalize text-sm">{item.value}</p>
                 </div>
               ))}
             </div>
-          )}
-        </CollapsibleSection>
+          </CollapsibleSection>
+        )}
 
-        {/* SECTION: Medical Timeline */}
-        <CollapsibleSection 
-          title="Medical Timeline" 
-          badge={documents.length === 0 ? "No data" : `${documents.length} files`}
-        >
+        <CollapsibleSection title="Medical Timeline" icon={Calendar} badge={documents.length === 0 ? 'No data' : `${documents.length} files`}>
           {documents.length === 0 ? (
-            <p className="text-muted italic">No documents uploaded.</p>
+            <p className="text-muted italic text-sm">No documents uploaded.</p>
           ) : (
-            <div className="relative border-l-2 border-primary/20 ml-4 sm:ml-6 pl-6 sm:pl-8 py-2 space-y-8">
-              {(() => {
-                const docsWithDates = documents.map(doc => {
-                  const dDate = extractions.find(e => (e.document_id === doc.document_id || (doc as any).id === e.document_id) && e.field_name === 'document_date');
-                  return { ...doc, extractedDate: dDate ? dDate.field_value : null };
-                });
-                
-                const sortedDocs = docsWithDates.sort((a, b) => {
-                  if (a.extractedDate && b.extractedDate) return new Date(a.extractedDate).getTime() - new Date(b.extractedDate).getTime();
-                  if (a.extractedDate) return -1;
-                  if (b.extractedDate) return 1;
-                  return 0;
-                });
-
-                return sortedDocs.map((doc, idx) => (
+            <div className="relative border-l-2 border-primary/20 ml-2 pl-6 py-2 space-y-6">
+              {documents.map((doc, idx) => {
+                const dDate = extractions.find(e => e.document_id === doc.document_id && e.field_name === 'document_date');
+                return (
                   <div key={doc.document_id || idx} className="relative">
-                    <div className="absolute w-4 h-4 bg-primary rounded-full -left-[35px] sm:-left-[41px] top-1 border-4 border-white shadow-sm" />
-                    
-                    <div className="bg-sand/30 border border-warmgray rounded-xl p-4 transition-all hover:shadow-md hover:border-primary/30">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                        <h4 className="text-sm font-bold text-charcoal">
-                          {doc.extractedDate ? (
-                            <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-primary"/> {doc.extractedDate}</span>
-                          ) : (
-                            <span className="text-muted italic">Date unknown</span>
-                          )}
-                        </h4>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                          doc.ocr_status === 'completed' ? 'bg-success/10 text-success' : 'bg-warmgray text-muted'
-                        }`}>
+                    <div className="absolute w-4 h-4 bg-primary rounded-full -left-[33px] top-1 ring-2 ring-white border-2 border-white shadow-sm" />
+                    <div className="bg-white border-2 border-warmgray rounded-xl p-4 hover:border-primary/30 hover:shadow-sm transition-all">
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-charcoal">
+                          <Calendar className="w-4 h-4 text-primary" />
+                          {dDate?.field_value || <span className="text-muted italic">Date unknown</span>}
+                        </div>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${doc.ocr_status === 'completed' ? 'bg-success/8 text-success border-success/20' : 'bg-sand text-muted border-warmgray'}`}>
                           {doc.ocr_status || 'Processed'}
                         </span>
                       </div>
-                      
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-white border border-warmgray rounded-lg flex items-center justify-center shadow-sm">
-                          📄
-                        </div>
-                        <div>
-                          <a href={doc.file_url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary hover:underline flex items-center gap-1">
-                            View Document <ExternalLink className="w-3 h-3" />
-                          </a>
-                        </div>
-                      </div>
+                      <a href={doc.file_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-bold text-primary hover:text-primary/70 transition-colors">
+                        <FileText className="w-3.5 h-3.5" /> View Document <ExternalLink className="w-3 h-3" />
+                      </a>
                     </div>
                   </div>
-                ));
-              })()}
+                );
+              })}
             </div>
           )}
         </CollapsibleSection>
 
-        {/* SECTION: OCR-Extracted Information */}
-        <CollapsibleSection 
-          title="OCR-Extracted Information" 
-          badge={extractions.length === 0 ? "No data" : `${extractions.length} fields`}
-        >
+        <CollapsibleSection title="OCR-Extracted Information" icon={FileText} badge={extractions.length === 0 ? 'No data' : `${extractions.length} fields`}>
           {reconciliationConflicts.length > 0 && (
-            <div className="mb-6 bg-terracotta/10 border border-terracotta/20 rounded-xl p-4">
-              <h3 className="text-terracotta font-bold flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-5 h-5" />
-                Patient-Document Reconciliation Conflicts
+            <div className="mb-5 bg-terracotta/8 border-2 border-terracotta/25 rounded-xl p-4">
+              <h3 className="text-sm font-bold text-terracotta flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-4 h-4" /> Reconciliation Conflicts
               </h3>
-              <p className="text-sm text-terracotta/90 mb-3">
-                The following information extracted from the patient's documents conflicts with their reported medical history:
-              </p>
-              <div className="space-y-3">
-                {reconciliationConflicts.map((conflict, idx) => (
-                  <div key={idx} className="bg-white/60 p-3 rounded-lg border border-terracotta/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-2.5">
+                {reconciliationConflicts.map((c, i) => (
+                  <div key={i} className="bg-white rounded-xl border border-terracotta/15 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs font-bold text-terracotta uppercase tracking-wider mb-1">{conflict.field}</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-charcoal">Document:</span>
-                        <span className="text-sm text-charcoal/80 line-clamp-1">{conflict.documentValue}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-sm font-semibold text-charcoal">Patient:</span>
-                        <span className="text-sm text-charcoal/80 line-clamp-1">{conflict.patientValue}</span>
-                      </div>
+                      <p className="text-[10px] font-bold text-terracotta uppercase tracking-widest mb-1">{c.field}</p>
+                      <p className="text-xs text-charcoal/70"><span className="font-semibold text-charcoal">Document:</span> {c.documentValue}</p>
+                      <p className="text-xs text-charcoal/70"><span className="font-semibold text-charcoal">Patient:</span> {c.patientValue}</p>
                     </div>
-                    <Button size="sm" variant="outline" className="text-terracotta border-terracotta/30 hover:bg-terracotta/5 whitespace-nowrap">
-                      Resolve Conflict
-                    </Button>
+                    <button className="text-xs font-bold text-terracotta border border-terracotta/30 px-3 py-1.5 rounded-lg hover:bg-terracotta hover:text-white transition-all whitespace-nowrap">Resolve</button>
                   </div>
                 ))}
               </div>
@@ -676,91 +548,78 @@ export default function TriageSummary() {
           )}
 
           {extractions.length === 0 ? (
-            <p className="text-muted italic">No data extracted from documents.</p>
+            <p className="text-muted italic text-sm">No data extracted from documents.</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {extractions.map(ext => {
                 const doc = documents.find(d => d.document_id === ext.document_id || (d as any).id === ext.document_id);
                 return (
-                <div key={ext.extraction_id} className={`bg-sand/50 p-4 rounded-xl border transition-all ${ext.confidence < 0.7 ? 'border-warning shadow-[0_0_8px_rgba(234,179,8,0.3)]' : 'border-warmgray'}`}>
-                  <div className="flex justify-between items-start mb-1">
-                    <p className="text-xs font-semibold text-muted uppercase tracking-wider">{ext.field_name}</p>
-                    <div className="flex gap-2 items-center">
-                      {ext.confidence < 0.7 && (
-                        <span className="text-[10px] bg-warning/20 text-warning-foreground border border-warning/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3" /> Low Confidence
-                        </span>
-                      )}
-                      {doc?.file_url && (
-                        <a href={doc.file_url} target="_blank" rel="noreferrer" title="View Source Document" className="text-primary hover:text-primary/80 transition-colors">
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
-                      )}
+                  <div key={ext.extraction_id} className={`bg-sand rounded-xl border-2 p-4 ${ext.confidence < 0.7 ? 'border-turmeric/40' : 'border-warmgray'}`}>
+                    <div className="flex justify-between items-start mb-1.5">
+                      <p className="text-[10px] font-bold text-muted uppercase tracking-widest">{ext.field_name}</p>
+                      <div className="flex gap-2 items-center">
+                        {ext.confidence < 0.7 && (
+                          <span className="text-[10px] bg-turmeric/10 text-charcoal border border-turmeric/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                            <AlertTriangle className="w-2.5 h-2.5 text-turmeric" /> Low
+                          </span>
+                        )}
+                        {doc?.file_url && (
+                          <a href={doc.file_url} target="_blank" rel="noreferrer" className="text-muted hover:text-primary transition-colors">
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
                     </div>
+                    <p className="text-charcoal font-semibold text-sm">{ext.field_value || '—'}</p>
                   </div>
-                  <p className="text-charcoal font-medium">{ext.field_value || '—'}</p>
-                </div>
-              )})}
+                );
+              })}
             </div>
           )}
         </CollapsibleSection>
 
-        {/* SECTION: Red Flags */}
-        <CollapsibleSection 
-          title="Red Flags" 
-          icon={AlertTriangle}
-          badge={redFlags.length === 0 ? "None" : `${redFlags.length} flags`}
-        >
+        <CollapsibleSection title="Red Flags" icon={AlertTriangle} badge={redFlags.length === 0 ? 'None' : `${redFlags.length} flags`} urgent={true}>
           {redFlags.length === 0 ? (
-            <p className="text-muted italic">No red flags triggered or they have been acknowledged.</p>
+            <p className="text-muted italic text-sm">No red flags triggered or they have been acknowledged.</p>
           ) : (
             <div>
-              <ul className="list-disc list-inside text-danger space-y-2 mb-4">
+              <div className="space-y-2.5 mb-4">
                 {redFlags.map(rf => (
-                  <li key={rf.flag_id} className="font-body text-sm font-medium">Rule Match: {rf.rule_id} (at {new Date(rf.created_at).toLocaleTimeString()})</li>
+                  <div key={rf.flag_id} className="bg-danger/6 border border-danger/20 rounded-xl px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-danger">Rule Match: {rf.rule_id}</p>
+                      <p className="text-xs text-danger/50 mt-0.5">at {new Date(rf.created_at).toLocaleTimeString()}</p>
+                    </div>
+                    <Zap className="w-4 h-4 text-danger/40" />
+                  </div>
                 ))}
-              </ul>
-              <Button onClick={handleAcknowledgeRedFlags} className="bg-danger text-white hover:bg-danger/90">
-                Acknowledge and Clear Flags
-              </Button>
+              </div>
+              <button
+                onClick={handleAcknowledgeRedFlags}
+                className="px-5 py-2.5 text-sm font-bold bg-danger text-white rounded-xl hover:bg-danger/90 transition-colors shadow-sm"
+              >
+                Acknowledge & Clear Flags
+              </button>
             </div>
           )}
         </CollapsibleSection>
 
-        {/* SECTION: Past Medical Records */}
-        <CollapsibleSection 
-          title="Past Medical Records" 
-          badge={pastVisits.length === 0 ? "None" : `${pastVisits.length} visits`}
-        >
+        <CollapsibleSection title="Past Medical Records" icon={ClipboardList} badge={pastVisits.length === 0 ? 'None' : `${pastVisits.length} visits`}>
           {pastVisits.length === 0 ? (
-            <p className="text-muted italic">No past medical records found for this patient.</p>
+            <p className="text-muted italic text-sm">No past medical records found for this patient.</p>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {pastVisits.map(visit => (
-                <div key={visit.session_id} className="bg-sand p-4 rounded-xl border border-warmgray">
+                <div key={visit.session_id} className="bg-sand border-2 border-warmgray p-4 rounded-xl hover:border-primary/20 transition-all">
                   <div className="flex justify-between items-start mb-2">
-                    <p className="font-semibold text-charcoal">{new Date(visit.date).toLocaleDateString()} {new Date(visit.date).toLocaleTimeString()}</p>
-                    <span className="text-xs font-bold bg-white px-2 py-1 rounded border border-warmgray uppercase">{visit.status}</span>
+                    <p className="font-semibold text-charcoal text-sm">{new Date(visit.date).toLocaleDateString()} · {new Date(visit.date).toLocaleTimeString()}</p>
+                    <span className="text-[10px] font-bold bg-white text-muted border border-warmgray px-2 py-0.5 rounded-lg uppercase">{visit.status}</span>
                   </div>
-                  <p className="text-sm text-charcoal mb-2"><span className="font-semibold">Chief Complaint:</span> {visit.chief_complaint}</p>
-                  
+                  <p className="text-sm text-charcoal/70"><span className="font-semibold text-charcoal">Complaint:</span> {visit.chief_complaint}</p>
                   {visit.doctor_notes && (
-                    <div className="bg-white p-3 rounded border border-warmgray mt-2">
-                      <p className="text-xs font-semibold text-muted mb-1">Doctor's Notes:</p>
-                      <p className="text-sm whitespace-pre-wrap">{visit.doctor_notes}</p>
-                    </div>
-                  )}
-
-                  {visit.documents && visit.documents.length > 0 && (
-                    <div className="mt-3">
-                      <p className="text-xs font-semibold text-muted mb-1">Documents:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {visit.documents.map(doc => (
-                          <a key={doc.document_id || doc.id} href={doc.file_url} target="_blank" rel="noreferrer" className="text-xs bg-forest text-white px-2 py-1 rounded hover:bg-forest/90">
-                            View Document
-                          </a>
-                        ))}
-                      </div>
+                    <div className="bg-white border border-warmgray p-3 rounded-lg mt-3">
+                      <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Doctor's Notes</p>
+                      <p className="text-xs text-charcoal whitespace-pre-wrap">{visit.doctor_notes}</p>
                     </div>
                   )}
                 </div>
@@ -769,29 +628,100 @@ export default function TriageSummary() {
           )}
         </CollapsibleSection>
 
-        {/* SECTION: Doctor Notes and Verification (Always Visible) */}
-        <section className="bg-white rounded-2xl border-2 border-warmgray p-6 sm:p-8 shadow-sm">
-          <h2 className="text-xl font-bold text-muted uppercase tracking-wider mb-4 border-b border-warmgray pb-2">Doctor Notes and Verification</h2>
-          <textarea 
-            className="w-full min-h-[120px] p-4 border border-warmgray rounded-xl focus:ring-2 focus:ring-primary focus:outline-none text-charcoal"
-            placeholder="Add any additional clinical notes here..."
+        {/* Feature 13: Historical Medication Comparison */}
+        <CollapsibleSection title="Medication History & Reconciliation" icon={Activity} badge="1 Change Detected">
+          <div className="bg-sand border-2 border-warmgray rounded-xl overflow-hidden">
+            <div className="grid grid-cols-2 text-xs font-bold text-muted uppercase tracking-widest border-b-2 border-warmgray bg-white">
+              <div className="p-3 border-r-2 border-warmgray">Previous Visit (Last Month)</div>
+              <div className="p-3">Current Visit</div>
+            </div>
+            
+            {/* Unchanged Medication */}
+            <div className="grid grid-cols-2 text-sm border-b border-warmgray/50">
+              <div className="p-4 border-r-2 border-warmgray">
+                <p className="font-bold text-charcoal">Metformin</p>
+                <p className="text-muted text-xs">500mg • Twice daily</p>
+              </div>
+              <div className="p-4 bg-white">
+                <p className="font-bold text-charcoal">Metformin</p>
+                <p className="text-muted text-xs">500mg • Twice daily</p>
+              </div>
+            </div>
+
+            {/* Changed Medication (Dose increase) */}
+            <div className="grid grid-cols-2 text-sm border-b border-warmgray/50">
+              <div className="p-4 border-r-2 border-warmgray">
+                <p className="font-bold text-charcoal">Amlodipine</p>
+                <p className="text-muted text-xs">5mg • Once daily</p>
+              </div>
+              <div className="p-4 bg-turmeric/10 border-l-4 border-turmeric">
+                <div className="flex items-center justify-between mb-0.5">
+                  <p className="font-bold text-charcoal">Amlodipine</p>
+                  <span className="text-[10px] font-bold text-turmeric bg-white border border-turmeric/30 px-1.5 rounded uppercase">Dose Changed</span>
+                </div>
+                <p className="text-muted text-xs"><span className="line-through opacity-60 mr-1">5mg</span><strong className="text-charcoal">10mg</strong> • Once daily</p>
+              </div>
+            </div>
+
+            {/* New Medication */}
+            <div className="grid grid-cols-2 text-sm">
+              <div className="p-4 border-r-2 border-warmgray flex items-center justify-center text-muted italic">
+                None
+              </div>
+              <div className="p-4 bg-success/10 border-l-4 border-success">
+                <div className="flex items-center justify-between mb-0.5">
+                  <p className="font-bold text-charcoal">Atorvastatin</p>
+                  <span className="text-[10px] font-bold text-success bg-white border border-success/30 px-1.5 rounded uppercase">New</span>
+                </div>
+                <p className="text-muted text-xs">20mg • At bedtime</p>
+              </div>
+            </div>
+          </div>
+        </CollapsibleSection>
+
+        {/* ── Doctor Notes ── */}
+        <section className="bg-white rounded-2xl border-2 border-warmgray shadow-sm p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-primary/8 border border-primary/15 flex items-center justify-center">
+              <MessageSquare className="w-4 h-4 text-primary" />
+            </div>
+            <h2 className="text-xs font-bold text-muted uppercase tracking-widest">Doctor Notes & Verification</h2>
+          </div>
+          <textarea
+            className="w-full min-h-[120px] p-4 bg-sand border-2 border-warmgray rounded-xl text-sm text-charcoal placeholder:text-muted focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/15 resize-none transition-all"
+            placeholder="Add clinical notes, impressions, or action items here…"
             value={doctorNotes}
-            onChange={(e) => setDoctorNotes(e.target.value)}
-          ></textarea>
+            onChange={e => setDoctorNotes(e.target.value)}
+          />
           <div className="flex items-center justify-between mt-4">
             {notesSaved && (
-              <span className="text-success text-sm font-semibold flex items-center gap-1">
-                <Check className="w-4 h-4" /> Notes Saved & Verified!
+              <span className="text-success text-sm font-bold flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4" /> Saved & Verified!
               </span>
             )}
-            <div className="ml-auto">
-              <Button 
-                className="bg-primary text-white hover:bg-primary/90" 
+            <div className="ml-auto flex items-center gap-3">
+              <button
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-white text-primary border-2 border-primary hover:bg-primary/5 transition-all shadow-sm disabled:opacity-50"
+                onClick={handleRouteToHIS}
+                disabled={isRouting}
+              >
+                {isRouting ? (
+                  <><div className="w-3.5 h-3.5 border border-primary/50 border-t-transparent rounded-full animate-spin" /> Routing…</>
+                ) : (
+                  <>Route to HIS</>
+                )}
+              </button>
+              <button
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-primary text-white hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50"
                 onClick={handleSaveNotes}
                 disabled={isSavingNotes}
               >
-                {isSavingNotes ? 'Saving...' : 'Save Notes & Verify'}
-              </Button>
+                {isSavingNotes ? (
+                  <><div className="w-3.5 h-3.5 border border-white/50 border-t-transparent rounded-full animate-spin" /> Saving…</>
+                ) : (
+                  <><Check className="w-3.5 h-3.5" /> Save Notes & Verify</>
+                )}
+              </button>
             </div>
           </div>
         </section>

@@ -224,7 +224,7 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
   };
 
   return (
-    <div className="w-full max-w-[768px] mx-auto flex flex-col gap-6">
+    <div className="w-full max-w-[768px] mx-auto flex flex-col gap-6 px-4 box-border">
       <div className="w-full flex justify-center pb-2">
          <LeafStepIndicator total={totalSteps} current={currentStep} />
       </div>
@@ -288,6 +288,19 @@ export const InterviewQuestion: React.FC<InterviewQuestionProps> = ({
               </button>
             </div>
           )}
+          </div>
+          
+          {/* Skip Button */}
+          <div className="mt-8 pt-6 border-t border-warmgray w-full flex flex-col items-center">
+            <button
+              onClick={() => onAnswer('skip', 'Skipped')}
+              className="text-sm font-semibold text-muted hover:text-charcoal transition-colors underline underline-offset-4"
+            >
+              {language === 'hi' ? 'इस प्रश्न को छोड़ें' : 'Skip this question'}
+            </button>
+            <p className="text-xs text-muted/70 mt-2">
+              {language === 'hi' ? 'आप हमेशा डॉक्टर को व्यक्तिगत रूप से बता सकते हैं' : 'You can always tell the doctor in person'}
+            </p>
           </div>
       </QuestionCard>
     </div>

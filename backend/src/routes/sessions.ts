@@ -17,7 +17,36 @@ router.post('/', async (req, res) => {
 
   // Insert session into Supabase using supported columns
   try {
-    const { data: sessionData, error: sessionErr } = await supabase
+    // Feature 21: Duplicate-Patient Prevention
+    // Check for an active session in the last 24 hours for the same patient
+    const oneDayAgo = new Date();
+    oneDayAgo.setHours(oneDayAgo.getHours() - 24);
+    
+    // We only check if there's a valid identifier to match on
+    if ((validAbha && validAbha !== '00000000000000') || phone) {
+      let query = supabase
+        .from('sessions')
+        .select('*')
+        .eq('status', 'active')
+        .gte('created_at', oneDayAgo.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1);
+        
+      if (validAbha && validAbha !== '00000000000000') {
+        query = query.eq('dummy_aadhaar', validAbha);
+      } else if (phone) {
+        query = query.eq('phone', phone);
+      }
+      
+      const { data: existingSessions, error: existErr } = await query;
+      
+      if (!existErr && existingSessions && existingSessions.length > 0) {
+        sessionResult = existingSessions[0];
+      }
+    }
+
+    if (!sessionResult) {
+      const { data: sessionData, error: sessionErr } = await supabase
       .from('sessions')
       .insert({
         hospital_id: validHospitalId,
@@ -55,6 +84,7 @@ router.post('/', async (req, res) => {
         created_at: new Date().toISOString()
       };
     }
+    } // End of if (!sessionResult)
   } catch (err: any) {
     console.error('Session create exception:', err);
     const fallbackId = crypto.randomUUID();
@@ -314,9 +344,11 @@ router.get('/:id/triage', async (req, res) => {
       .map((a: any) => ({
         fact_id: a.id,
         id: a.id,
+        question_id: a.question_id,
         question_text: a.question_id === 'chief_complaint' 
           ? 'Chief Complaint' 
           : a.question_id.replace(/^q_/, 'Question ').replace(/^ocr_/, 'OCR '),
+        answer_text: a.answer_text,
         answer_value: a.answer_text,
         provenance: a.provenance || 'patient_reported',
         verified: a.verified ? 1 : 0,

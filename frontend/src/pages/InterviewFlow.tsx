@@ -53,7 +53,17 @@ export default function InterviewFlow() {
     const loadedTree = getInterviewTree(session.complaint);
     if (loadedTree) {
       setTree(loadedTree);
-      setCurrentQId(loadedTree.start_question_id);
+      
+      // Feature 20: Session Recovery
+      const savedQId = localStorage.getItem(`interview_qid_${session.id}`);
+      const savedStepCount = localStorage.getItem(`interview_step_${session.id}`);
+      
+      if (savedQId) {
+        setCurrentQId(savedQId);
+        setStepCount(savedStepCount ? parseInt(savedStepCount, 10) : 0);
+      } else {
+        setCurrentQId(loadedTree.start_question_id);
+      }
     } else {
       setIsFinished(true);
     }
@@ -172,23 +182,25 @@ export default function InterviewFlow() {
             body: JSON.stringify({
               session_id: session.id,
               rule_id: redFlag.flag_id,
-              // we don't have the fact_id since it's generated on the server,
-              // but we link it via session_id and rule_id
             })
           }).catch(console.error);
         }
       }
       setIsFinished(true);
+      localStorage.removeItem(`interview_qid_${session.id}`);
+      localStorage.removeItem(`interview_step_${session.id}`);
     } else {
       setCurrentQId(nextResult);
+      localStorage.setItem(`interview_qid_${session.id}`, nextResult);
+      localStorage.setItem(`interview_step_${session.id}`, (stepCount + 1).toString());
     }
   };
 
   if (isFinished) {
     return (
-      <div className="min-h-screen bg-sand flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      <div className="min-h-screen bg-sand flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-x-hidden">
         <MandalaBackground />
-        <QuestionCard className="w-full max-w-2xl text-center z-10 p-12">
+        <QuestionCard className="w-full max-w-2xl text-center z-10 p-8 sm:p-12 box-border">
           {redFlagTriggered ? (
             <>
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
@@ -245,9 +257,9 @@ export default function InterviewFlow() {
   const currentQ = tree.questions[currentQId];
 
   return (
-    <div className="min-h-screen bg-sand flex flex-col pt-12 p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-sand flex flex-col pt-12 p-4 sm:p-6 relative overflow-x-hidden">
       <MandalaBackground />
-      <div className="z-10 w-full">
+      <div className="z-10 w-full box-border">
          <InterviewQuestion
            question={currentQ}
            totalSteps={Object.keys(tree.questions).length}

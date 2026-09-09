@@ -286,10 +286,10 @@ export default function MedicalHistoryFlow() {
               : 'Your health history has been synced to the triage desk. The doctor will see you shortly.'}
           </p>
           <Button
-            onClick={() => navigate('/submitted')}
+            onClick={() => navigate('/preview')}
             className="w-full min-h-[58px] text-lg rounded-[12px] bg-primary hover:bg-primary/90 text-white font-body"
           >
-            {session?.language === 'hi' ? 'रसीद देखें' : 'View Check-In Token'}
+            {session?.language === 'hi' ? 'विवरण की समीक्षा करें' : 'Review My Details'}
           </Button>
           {isSyncing && (
              <p className="text-primary text-sm font-body animate-pulse mt-4">Syncing offline data...</p>

@@ -17,6 +17,7 @@ import {
   Stethoscope, 
   Activity,
   Sparkles,
+  User,
   X
 } from 'lucide-react';
 import { API_URL } from '@/lib/api';
@@ -263,6 +264,15 @@ export default function AdminHospitals() {
               Patient Kiosk
             </Button>
             <Button
+              variant="outline"
+              size="sm"
+              className="border-warmgray rounded-xl h-10 px-3.5 gap-2 text-xs font-semibold text-charcoal hover:bg-sand"
+              onClick={() => navigate('/patient/login')}
+            >
+              <User className="w-4 h-4 text-emerald-600" />
+              Patient Portal
+            </Button>
+            <Button
               className="bg-primary hover:bg-primary/90 text-white rounded-xl h-10 px-4 gap-2 text-sm font-semibold shadow-xs transition-colors"
               onClick={handleOpenAdd}
             >
@@ -273,9 +283,30 @@ export default function AdminHospitals() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto p-6 md:p-8 flex-1 w-full space-y-8">
+      <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8">
         
+        {/* Hackathon Demo Notice */}
+        <div className="mb-6 bg-blue-50/80 border border-blue-200 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-blue-100 text-blue-600 rounded-xl mt-0.5">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-blue-900">Welcome to the Admin Demo</h3>
+              <p className="text-sm text-blue-800/80 mt-1 max-w-2xl">
+                This portal manages the multi-tenant architecture. You can create a facility, grab its Doctor Portal URL, and log in to see the AI triage queue for that specific hospital.
+              </p>
+            </div>
+          </div>
+          <Button 
+            className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 px-5 shadow-sm"
+            onClick={() => navigate('/doctor/dashboard')}
+          >
+            <Stethoscope className="w-4 h-4 mr-2" />
+            Global Doctor Login
+          </Button>
+        </div>
+
         {/* Stats Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <div className="bg-white p-5 rounded-2xl border border-warmgray shadow-xs flex items-center justify-between">
@@ -517,25 +548,35 @@ export default function AdminHospitals() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex items-center gap-2 pt-2 border-t border-warmgray/40">
+                  <div className="flex flex-col gap-2 pt-2 border-t border-warmgray/40">
                     <Button
                       variant="outline"
-                      size="sm"
-                      className="flex-1 border-warmgray text-charcoal hover:bg-sand rounded-xl h-10 text-xs font-semibold gap-1.5"
-                      onClick={() => handleOpenEdit(h)}
+                      className="w-full border-primary text-primary hover:bg-primary hover:text-white rounded-xl h-10 text-xs font-bold gap-2 transition-colors"
+                      onClick={() => window.open(`/hospital/${hospitalId}/doctor`, '_blank')}
                     >
-                      <Edit3 className="w-3.5 h-3.5 text-muted" />
-                      Edit Details
+                      <Activity className="w-4 h-4" />
+                      View Triage Queue
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-danger/30 text-danger hover:bg-danger/10 hover:border-danger rounded-xl h-10 px-3 text-xs font-semibold"
-                      onClick={() => handleOpenDelete(h)}
-                      title="Remove Facility"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 border-warmgray text-charcoal hover:bg-sand rounded-xl h-10 text-xs font-semibold gap-1.5"
+                        onClick={() => handleOpenEdit(h)}
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-muted" />
+                        Edit Details
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-danger/30 text-danger hover:bg-danger/10 hover:border-danger rounded-xl h-10 px-3 text-xs font-semibold"
+                        onClick={() => handleOpenDelete(h)}
+                        title="Remove Facility"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );

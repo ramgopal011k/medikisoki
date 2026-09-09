@@ -122,7 +122,7 @@ npm install
    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS chief_complaint TEXT;
    ```
 
-### 3. Start Development Servers
+### 3. Start Development Servers & Run Tests
 
 **Start Backend:**
 ```bash
@@ -131,12 +131,43 @@ npm run dev
 # Server running at http://localhost:3001
 ```
 
+**Run Backend Tests:**
+```bash
+cd backend
+npm test
+```
+
 **Start Frontend:**
 ```bash
 cd frontend
 npm run dev
 # App running at http://localhost:5173
 ```
+
+**Run Frontend Tests:**
+```bash
+cd frontend
+npm test
+```
+
+---
+
+## 🔒 Security Architecture
+
+- **Password Security**: Uses industry-standard `bcrypt` (`$2b$` prefix, 10 salt rounds) for physician accounts.
+- **API Guardrails**: Protected `/api/*` endpoints require `Authorization: Bearer <token>`. Public endpoints (`/health`, `/auth/login`, `/auth/register`, `GET /api/hospitals`) are selectively accessible.
+- **Defensive Headers**: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection`, and CSP headers.
+- **Rate Limiting**: In-memory token bucket rate limiting on authentication and AI inference routes to mitigate brute force and denial of service.
+- **Prompt Injection Sanitization**: Input normalization strips adversarial delimiters (`[INST]`, `<|im_start|>`) and command overrides before passing patient text to Gemini LLMs.
+
+---
+
+## 🌐 Simulation Boundaries (Hackathon Scope)
+
+For hackathon review and live demonstration, the following external national gateway components operate under simulated boundaries:
+- **ABDM / ABHA Gateway**: Generates standards-compliant 14-digit ABHA identifiers and validates formats without requiring a live NHA sandbox gateway connection.
+- **Hospital Information System (HIS)**: OPD routing, bed allocation, and token issuance simulate hospital HIS responses with authentic FHIR R4 Bundle exports.
+- **SMS OTP Gateway**: Phone number verification uses instant simulation mode for zero-delay kiosk testing.
 
 ---
 
@@ -149,7 +180,7 @@ npm run dev
 - *(Alternatively, click "Dev Bypass Login" in development mode).*
 
 ### **2. Patient Kiosk Journey**
-1. **Language & Hospital**: Visit `http://localhost:5173/consent`, choose **English** or **Hindi**, select Hospital.
+1. **Language & Hospital**: Visit `http://localhost:5173/welcome` or `http://localhost:5173/consent`, choose **English** or **Hindi**, select Hospital.
 2. **ABHA / Aadhaar ID**: Enter 14-digit ABHA or skip to generate anonymous record.
 3. **Chief Complaint**: Select or speak a complaint (e.g., Chest Pain, Fever, Cough, Stomach Pain).
 4. **Adaptive Follow-Up / AYUSH**: Complete adaptive questions or 10-dimension Dashavidha Pariksha.
@@ -169,3 +200,27 @@ npm run dev
 - **Auditable Data Provenance**: Every clinical fact is tagged with `patient_reported`, `doctor_entered`, `system_derived`, or `ocr_extracted`.
 - **Interoperability**: One-click export to FHIR R4 Bundle format for ABDM (Ayushman Bharat Digital Mission) compliance.
 - **Fail-Safe Offline Operation**: Automatic queueing in IndexedDB with background resynchronization upon network restoration.
+
+---
+
+## 📚 Technical Architecture, Presentation & Audit Reports
+
+All comprehensive audits, architectural specifications, and migration scripts are organized in the [`docs/`](docs/) directory:
+
+### **Presentation & Visuals**
+- **Architecture & Technical Approach Slide**: [`medikiosk_technical_approach.html`](medikiosk_technical_approach.html)
+- **High-Resolution Architecture Diagram**: [`medikiosk_technical_approach.png`](medikiosk_technical_approach.png)
+- **Interactive Walkthrough / Demo Recording**: [`mtest.mp4`](mtest.mp4)
+
+### **Reports & Audits** ([`docs/reports/`](docs/reports/))
+- **Technical Architecture**: [`docs/reports/TECHNICAL_APPROACH_REPORT.md`](docs/reports/TECHNICAL_APPROACH_REPORT.md)
+- **Tech Stack Specification**: [`docs/reports/TECH_STACK_REPORT.md`](docs/reports/TECH_STACK_REPORT.md)
+- **Project Requirements & Gap Analysis**: [`docs/reports/REQUIREMENTS_MAPPING_REPORT.md`](docs/reports/REQUIREMENTS_MAPPING_REPORT.md) & [`docs/reports/GAP_ANALYSIS.md`](docs/reports/GAP_ANALYSIS.md)
+- **Feature Inventory & Verification**: [`docs/reports/FEATURE_INVENTORY.md`](docs/reports/FEATURE_INVENTORY.md) & [`docs/reports/FEATURE_VERIFICATION_REPORT.md`](docs/reports/FEATURE_VERIFICATION_REPORT.md)
+- **Security & Pre-Deployment Audit**: [`docs/reports/PRE_DEPLOYMENT_AUDIT.md`](docs/reports/PRE_DEPLOYMENT_AUDIT.md)
+- **Deployment Guide**: [`docs/reports/SURVIVAL_DEPLOY.md`](docs/reports/SURVIVAL_DEPLOY.md)
+
+### **Database Migrations** ([`docs/migrations/`](docs/migrations/))
+- **Consolidated Supabase Schema**: [`backend/schema.sql`](backend/schema.sql)
+- **Production Fix Migration**: [`docs/migrations/fix_schema.sql`](docs/migrations/fix_schema.sql)
+

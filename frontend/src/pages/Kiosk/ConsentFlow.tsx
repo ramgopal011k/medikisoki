@@ -249,6 +249,7 @@ export default function ConsentFlow() {
 
       localStorage.setItem('patient_session', sessionToken);
       localStorage.setItem('session_id', sessionToken);
+      if (patientName) localStorage.setItem('patient_name', patientName);
       localStorage.setItem('patient_complaint', validComplaint);
       localStorage.setItem('chief_complaint', chiefKey);
       localStorage.setItem('patient_language', validLang);
@@ -267,6 +268,7 @@ export default function ConsentFlow() {
       const fallbackToken = crypto.randomUUID();
       localStorage.setItem('patient_session', fallbackToken);
       localStorage.setItem('session_id', fallbackToken);
+      if (patientName) localStorage.setItem('patient_name', patientName);
       localStorage.setItem('patient_complaint', validComplaint);
       localStorage.setItem('chief_complaint', chiefKey);
       localStorage.setItem('patient_language', validLang);

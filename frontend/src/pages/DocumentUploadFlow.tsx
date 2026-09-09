@@ -167,6 +167,13 @@ export default function DocumentUploadFlow() {
       let nameVal = '';
       let diagVal = '';
       let medsVal = '';
+      let procVal = '';
+      let docType = 'Unknown Document';
+      
+      const fullTextLower = text.toLowerCase();
+      if (fullTextLower.includes('discharge') || fullTextLower.includes('summary')) docType = 'Discharge Summary';
+      else if (fullTextLower.includes('lab') || fullTextLower.includes('report') || fullTextLower.includes('pathology')) docType = 'Lab Report';
+      else if (fullTextLower.includes('rx') || fullTextLower.includes('prescription') || fullTextLower.includes('clinic')) docType = 'Prescription';
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
@@ -191,6 +198,11 @@ export default function DocumentUploadFlow() {
           }
         }
 
+        // Procedure Parsing (Feature 10)
+        if (lowerLine.includes('procedure:') || lowerLine.includes('surgery:') || lowerLine.includes('operation:')) {
+          procVal += (procVal ? ', ' : '') + (line.split(/[:]/)[1]?.trim() || '');
+        }
+
         // Medications Parsing
         if (
           lowerLine.includes('rx:') || 
@@ -208,8 +220,10 @@ export default function DocumentUploadFlow() {
       }
 
       setExtractions([
+        { field_name: 'Document Type', field_value: docType, raw_text: text, confidence: docType !== 'Unknown Document' ? 0.9 : 0.4 },
         { field_name: 'Patient Name', field_value: nameVal || '', raw_text: text, confidence: nameVal ? 0.8 : 0 },
         { field_name: 'Diagnosis', field_value: diagVal || '', raw_text: text, confidence: diagVal ? 0.7 : 0 },
+        { field_name: 'Procedures', field_value: procVal || '', raw_text: text, confidence: procVal ? 0.75 : 0 },
         { field_name: 'Medications', field_value: medsVal || '', raw_text: text, confidence: medsVal ? 0.75 : 0 }
       ]);
 

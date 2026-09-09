@@ -98,10 +98,18 @@ export function useAsr() {
       const patientLang = localStorage.getItem('patient_language') || 'en';
       const requestedLang = options?.lang || (patientLang === 'hi' ? 'hi-IN' : 'en-IN');
 
-      // 1. Acquire microphone stream
+      // 1. Check for HTTPS or localhost
+      if (typeof window !== 'undefined' && !window.isSecureContext) {
+        setStatus('unsupported');
+        setError('Voice input requires a secure connection (HTTPS). Please tap your answer instead.');
+        setIsListening(false);
+        return;
+      }
+
+      // 2. Acquire microphone stream
       if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
         setStatus('unsupported');
-        setError('Voice input is not supported in this browser.');
+        setError('Voice input is not supported in this browser. Please tap your answer instead.');
         setIsListening(false);
         return;
       }
@@ -157,16 +165,22 @@ export function useAsr() {
             setStatus('processing');
 
             try {
-              const isMp4 = !recorder?.mimeType || recorder?.mimeType.includes('mp4');
+              const mimeType = recorder?.mimeType || 'audio/webm';
+              const cleanMimeType = mimeType.split(';')[0];
+              
+              let fileExt = 'webm';
+              if (cleanMimeType.includes('mp4') || cleanMimeType.includes('mp4a')) fileExt = 'mp4';
+              else if (cleanMimeType.includes('ogg')) fileExt = 'ogg';
+
               const audioBlob = new Blob(audioChunksRef.current, {
-                type: recorder?.mimeType || 'audio/mp4',
+                type: cleanMimeType,
               });
 
               const formData = new FormData();
-              formData.append('file', audioBlob, isMp4 ? 'speech.mp4' : 'speech.webm');
+              formData.append('file', audioBlob, `speech.${fileExt}`);
               formData.append('language', requestedLang);
 
-              const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+              const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:3001`;
               const response = await fetch(`${API_URL}/api/sarvam/asr`, {
                 method: 'POST',
                 body: formData,

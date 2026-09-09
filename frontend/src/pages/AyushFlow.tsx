@@ -241,7 +241,7 @@ export default function AyushFlow() {
           label: `${opt.en} / ${opt.hi}`
         }));
         
-        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/match-voice`, {
+        const res = await fetch(`${API_URL}/match-voice`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: transcript, options: optionsForGemini })
